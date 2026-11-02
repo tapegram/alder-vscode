@@ -9,7 +9,8 @@ import { checkBinary, Gate, MISSING_SCRATCH, MISSING_TOKENS, RootStatus } from '
 import { commandUri, selectorPatterns, serverEnv } from './clientConfig';
 import { ScratchStore, ScratchParams } from './scratch';
 
-interface Entry { root: string; real: string; client: LanguageClient; starting: Promise<void> }
+// stopping marks a stop the extension asked for, which errorHandler.closed must not treat as a crash.
+interface Entry { root: string; real: string; client: LanguageClient; starting: Promise<void>; stopping: boolean }
 
 // Clients is one LanguageClient per app root, as alder.nvim has one client per root. Roots are
 // compared by real path; the selector covers the path the documents use and the real one.
@@ -83,6 +84,8 @@ export class Clients {
       errorHandler: {
         error: () => ({ action: ErrorAction.Continue }),
         closed: () => {
+          // e is declared below; closed only runs once the client has started
+          if (e.stopping) return { action: CloseAction.DoNotRestart, handled: true };
           closes++;
           this.warnOnce(`closed:${real}:${closes > 1 ? 'final' : 'first'}`, 'alder lsp stopped — Alder: Show Health');
           return { action: closes === 1 ? CloseAction.Restart : CloseAction.DoNotRestart, handled: true };
@@ -94,14 +97,17 @@ export class Clients {
     const exec = client.getFeature(ExecuteCommandRequest.method) as unknown as { initialize: (c: unknown) => void };
     exec.initialize = () => {};
     client.onNotification('alder/scratch', (p: ScratchParams) => this.scratch.record(p));
-    const starting = client.start().then(() => {
+    const e: Entry = { root, real, client, starting: Promise.resolve(), stopping: false };
+    e.starting = client.start().then(() => {
       const caps = client.initializeResult?.capabilities;
       if (!caps?.semanticTokensProvider) this.warnOnce('tokens', `alder: ${MISSING_TOKENS}`);
       if (!(caps?.experimental as { alderScratch?: boolean } | undefined)?.alderScratch) this.warnOnce('scratch', `alder: ${MISSING_SCRATCH}`);
     }, err => {
       this.output.appendLine(`alder lsp for ${real} failed to start: ${err instanceof Error ? err.message : String(err)}`);
+      // forget the dead client, so the next ensure starts a new one
+      if (this.byReal.get(real) === e) this.byReal.delete(real);
     });
-    return { root, real, client, starting };
+    return e;
   }
 
   async forUri(uri: vscode.Uri | string): Promise<LanguageClient | undefined> {
@@ -111,12 +117,18 @@ export class Clients {
     return this.byReal.get(await realRoot(root))?.client;
   }
 
-  // execute sends a server command to the server of the document it names, else the active
-  // editor's, else the only one running.
+  // execute sends a server command to the server of the document it names; a command that
+  // names no document goes to the active editor's server, else the only one running.
   async execute(command: string, args: unknown[]): Promise<unknown> {
-    const target = commandUri(args) ?? vscode.window.activeTextEditor?.document.uri;
-    let client = target ? await this.forUri(target) : undefined;
-    if (!client && this.byReal.size === 1) client = [...this.byReal.values()][0].client;
+    const named = commandUri(args);
+    let client: LanguageClient | undefined;
+    if (named !== undefined) {
+      client = await this.forUri(named);
+    } else {
+      const active = vscode.window.activeTextEditor?.document.uri;
+      client = active ? await this.forUri(active) : undefined;
+      if (!client && this.byReal.size === 1) client = [...this.byReal.values()][0].client;
+    }
     if (!client) {
       void vscode.window.showErrorMessage('alder: no alder lsp running for this file');
       return undefined;
@@ -148,7 +160,13 @@ export class Clients {
   async stopAll(): Promise<void> {
     const entries = [...this.byReal.values()];
     this.byReal.clear();
-    await Promise.all(entries.map(e => e.client.stop().catch(() => undefined)));
+    for (const e of entries) e.stopping = true;
+    // a client still starting cannot shut down (v11 stop() throws unless Running), and would
+    // be orphaned and restarted; wait for its start to settle first
+    await Promise.all(entries.map(async e => {
+      await e.starting;
+      await e.client.stop().catch(() => undefined);
+    }));
   }
 
   // restart forgets the gate and the warnings, stops every client, and starts one per root
