@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import type { Api } from '../../src/extension';
 
 export const ws = () => process.env.ALDER_E2E_WS!;
@@ -17,7 +17,7 @@ export async function open(rel: string): Promise<vscode.TextEditor> {
   const editor = await vscode.window.showTextDocument(doc);
   const a = await api();
   await until(async () => (await a.clients.ensure(doc)) !== undefined
-    && a.clients.statuses().some(s => s.running && doc.uri.fsPath.startsWith(s.root)), `client for ${rel}`);
+    && a.clients.statuses().some(s => s.running && (doc.uri.fsPath === s.root || doc.uri.fsPath.startsWith(s.root + sep))), `client for ${rel}`);
   return editor;
 }
 
@@ -55,4 +55,10 @@ export function decode(data: Uint32Array, legend: vscode.SemanticTokensLegend): 
     out.push({ line, char, len: data[i + 2], type: legend.tokenTypes[data[i + 3]], mods });
   }
   return out;
+}
+
+// revert drops a document's unsaved edits (the command works on the active editor).
+export async function revert(doc: vscode.TextDocument): Promise<void> {
+  await vscode.window.showTextDocument(doc);
+  await vscode.commands.executeCommand('workbench.action.files.revert');
 }

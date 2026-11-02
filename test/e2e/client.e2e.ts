@@ -1,7 +1,17 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { api, at, decode, file, open, until } from './helpers';
+// types only: the request objects of the test's own vscode-languageclient are not the bundled
+// client's (its parameter-structure check rejects them), so requests go by method name
+import type { FoldingRange, LanguageClient, SelectionRange } from 'vscode-languageclient/node';
 import { TOKEN_TYPES, TOKEN_MODIFIERS } from '../../src/legend';
+
+// serverOf is the stock client of the root that holds uri.
+async function serverOf(uri: vscode.Uri): Promise<LanguageClient> {
+  const c = await (await api()).clients.forUri(uri);
+  assert.ok(c, `no client for ${uri.fsPath}`);
+  return c;
+}
 
 describe('the client', () => {
   it('starts one client for the blog with tokens, folding, selection and scratch', async () => {
@@ -35,18 +45,40 @@ describe('the client', () => {
     assert.ok(load?.mods.includes('declaration'));
   });
 
-  it('folding folds load; selection grows through model.post.title', async () => {
+  // folding and selection go straight to the root's server: VS Code's built-in indentation
+  // folding and smart select would answer through the provider commands without it.
+  it('the server folds load and the imports (kind imports, also through VS Code)', async () => {
     const { document: doc } = await open('blog/app/Posts/Show.alder');
+    const client = await serverOf(doc.uri);
     const loadLine = at(doc, '\nload ', 0, 1).line;
-    const folds = await vscode.commands.executeCommand<vscode.FoldingRange[]>('vscode.executeFoldingRangeProvider', doc.uri);
-    assert.ok(folds.some(f => (f.start === loadLine || f.start === loadLine + 1) && f.end > f.start + 5), JSON.stringify(folds));
-    const p = at(doc, 'model.post.title', 0, 'model.post.'.length + 1);
-    const [sel] = await vscode.commands.executeCommand<vscode.SelectionRange[]>('vscode.executeSelectionRangeProvider', doc.uri, [p]);
-    const chain: vscode.Range[] = [];
-    for (let s: vscode.SelectionRange | undefined = sel; s; s = s.parent) chain.push(s.range);
-    assert.ok(chain.length >= 4, `chain of ${chain.length}`);
-    assert.ok(chain[0].contains(p));
-    for (let i = 1; i < chain.length; i++) assert.ok(chain[i].contains(chain[i - 1]) && !chain[i].isEqual(chain[i - 1]), `level ${i} grows`);
+    const first = at(doc, 'import Layout').line, last = at(doc, 'import Table.User').line;
+    const folds = await client.sendRequest<FoldingRange[] | null>('textDocument/foldingRange', { textDocument: { uri: doc.uri.toString() } });
+    assert.ok(folds?.some(f => (f.startLine === loadLine || f.startLine === loadLine + 1) && f.endLine > f.startLine + 5), JSON.stringify(folds));
+    assert.ok(folds?.some(f => f.startLine === first && f.endLine === last && f.kind === 'imports'), JSON.stringify(folds));
+    // built-in indentation folding has no kinds: an Imports range reached VS Code from alder
+    const vs = await vscode.commands.executeCommand<vscode.FoldingRange[]>('vscode.executeFoldingRangeProvider', doc.uri);
+    assert.ok(vs.some(f => f.start === first && f.end === last && f.kind === vscode.FoldingRangeKind.Imports), JSON.stringify(vs));
+  });
+
+  it('the server grows the selection through model.post.title, the attribute, the element, view, the module', async () => {
+    const { document: doc } = await open('blog/app/Posts/Show.alder');
+    const client = await serverOf(doc.uri);
+    const p = at(doc, '{model.post.title}>', 0, 12);
+    const answer = await client.sendRequest<SelectionRange[] | null>('textDocument/selectionRange', {
+      textDocument: { uri: doc.uri.toString() }, positions: [{ line: p.line, character: p.character }],
+    });
+    assert.equal(answer?.length, 1);
+    const texts: string[] = [];
+    for (let s: SelectionRange | undefined = answer![0]; s; s = s.parent) {
+      const r = s.range;
+      texts.push(doc.getText(new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character)));
+    }
+    assert.equal(texts.length, 5, JSON.stringify(texts));
+    assert.equal(texts[0], 'model.post.title');
+    assert.equal(texts[1], 'title={model.post.title}');
+    assert.ok(texts[2].startsWith('<Layout.Page') && texts[2].endsWith('</Layout.Page>'), texts[2]);
+    assert.ok(texts[3].startsWith('view : Model'), texts[3]);
+    assert.ok(texts[4].startsWith('module Posts.Show'), texts[4]);
   });
 
   it('two apps in one workspace get two clients, each document its own', async () => {
@@ -65,6 +97,7 @@ describe('the client', () => {
     const text = (await (await api()).health()).join('\n');
     assert.match(text, /^binary: \//m);
     assert.match(text, /ok: alder lsp running for .*\/blog/);
+    assert.match(text, /ok: alder lsp running for .*\/fill/);
     assert.match(text, /ALDER_FILL_COMMAND: set/);
     assert.ok(!text.includes('Helpers.goLogin'));
   });
