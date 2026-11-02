@@ -123,7 +123,131 @@
           "markdownDescription": "Extra arguments for `alder test`."
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "alder.generate",
+        "title": "Generate…",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.routes",
+        "title": "Routes",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.run",
+        "title": "Run the App",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.explainDiagnostic",
+        "title": "Explain Diagnostic",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.test.run",
+        "title": "Run Tests",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.test.runAtCursor",
+        "title": "Run Test at Cursor",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.test.mutate",
+        "title": "Mutation Testing",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.scratch.open",
+        "title": "Open Scratch",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.scratch.send",
+        "title": "Send to Scratch",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.scratch.openValue",
+        "title": "Open Scratch Value",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.showHealth",
+        "title": "Show Health",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.restartServer",
+        "title": "Restart Server",
+        "category": "Alder"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "alder.generate",
+        "key": "ctrl+alt+a g",
+        "mac": "cmd+alt+a g",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.routes",
+        "key": "ctrl+alt+a u",
+        "mac": "cmd+alt+a u",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.run",
+        "key": "ctrl+alt+a r",
+        "mac": "cmd+alt+a r",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.test.run",
+        "key": "ctrl+alt+a t",
+        "mac": "cmd+alt+a t",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.scratch.open",
+        "key": "ctrl+alt+a x",
+        "mac": "cmd+alt+a x",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.explainDiagnostic",
+        "key": "ctrl+alt+a e",
+        "mac": "cmd+alt+a e",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.test.runAtCursor",
+        "key": "ctrl+alt+a shift+t",
+        "mac": "cmd+alt+a shift+t",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.test.mutate",
+        "key": "ctrl+alt+a m",
+        "mac": "cmd+alt+a m",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.scratch.send",
+        "key": "ctrl+alt+a s",
+        "mac": "cmd+alt+a s",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.scratch.openValue",
+        "key": "ctrl+alt+a o",
+        "mac": "cmd+alt+a o",
+        "when": "editorLangId == alder"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",

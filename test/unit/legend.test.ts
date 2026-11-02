@@ -21,3 +21,12 @@ test('package.json declares each custom type with its superType and scope', () =
   }
   assert.equal(pkg.contributes.semanticTokenTypes.length, Object.keys(CUSTOM_TYPES).length);
 });
+
+test('package.json contributes the twelve Alder commands, each with a category', () => {
+  const ids = pkg.contributes.commands.map(c => c.command).sort();
+  assert.deepEqual(ids, ['alder.explainDiagnostic', 'alder.generate', 'alder.restartServer', 'alder.routes',
+    'alder.run', 'alder.scratch.open', 'alder.scratch.openValue', 'alder.scratch.send', 'alder.showHealth',
+    'alder.test.mutate', 'alder.test.run', 'alder.test.runAtCursor']);
+  assert.ok(pkg.contributes.commands.every(c => c.category === 'Alder'));
+  assert.ok(!ids.includes('alder.fill') && !ids.includes('alder.explain'), 'server commands are not contributed');
+});
