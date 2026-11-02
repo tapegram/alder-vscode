@@ -11,6 +11,7 @@ const FILL_VARS = ['ANTHROPIC_API_KEY', 'ALDER_FILL_COMMAND', 'ALDER_FILL_MODEL'
 // shorter PATH than a shell, so the Go install directories and ~/bin follow PATH.
 export function candidates(setting: string, env: NodeJS.ProcessEnv, home: string): string[] {
   if (isAbsolute(setting)) return [setting];
+  if (setting.startsWith('~/')) return [join(home, setting.slice(2))];
   if (setting.includes('/')) return [resolve(setting)];
   const dirs = (env.PATH ?? '').split(delimiter).filter(d => d !== '');
   if (env.GOBIN) dirs.push(env.GOBIN);

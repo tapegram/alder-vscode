@@ -98,3 +98,7 @@ test('the report with no server running says how to start one', () => {
   const text = report({ ok: false, problem: 'x' }, [], {}).join('\n');
   assert.match(text, /no alder lsp running \(open an \.alder file inside an app\)/);
 });
+
+test('candidates expands ~/ in alder.path to the home directory', () => {
+  assert.deepEqual(candidates('~/bin/alder', { PATH: '/usr/bin' }, '/home/u'), ['/home/u/bin/alder']);
+});
