@@ -87,6 +87,42 @@
         "editor.insertSpaces": true,
         "editor.semanticHighlighting.enabled": true
       }
+    },
+    "configuration": {
+      "title": "Alder",
+      "properties": {
+        "alder.path": {
+          "type": "string",
+          "default": "alder",
+          "markdownDescription": "The `alder` binary: an absolute path, or a name looked up on `PATH`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and `~/bin`."
+        },
+        "alder.serverEnv": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Environment for `alder lsp`, over VS Code's own: for example `ANTHROPIC_API_KEY`, `ALDER_FILL_MODEL`, `ALDER_FILL_COMMAND`, `ALDER_LSP_LOG`."
+        },
+        "alder.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the LSP traffic with alder lsp into the Alder output channel."
+        },
+        "alder.test.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra arguments for `alder test`."
+        }
+      }
     }
   },
   "scripts": {
