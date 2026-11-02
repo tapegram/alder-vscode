@@ -1,0 +1,61 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, vscode: stable, package: true }
+          - { os: macos-latest, vscode: stable, package: false }
+          - { os: ubuntu-latest, vscode: 1.91.0, package: false }
+    name: test (${{ matrix.os }}, vscode ${{ matrix.vscode }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: alder ref
+        id: ref
+        run: echo "sha=$(cat .alder-ref)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: tapegram/alder
+          ref: ${{ steps.ref.outputs.sha }}
+          path: alder
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: alder/go.mod
+          cache-dependency-path: alder/go.sum
+      - name: alder
+        run: go build -o "$RUNNER_TEMP/bin/alder" ./cmd/alder
+        working-directory: alder
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - uses: actions/cache@v4
+        with:
+          path: .vscode-test
+          key: vscode-test-${{ runner.os }}-${{ matrix.vscode }}
+      - name: contract
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a npm run test:e2e; else npm run test:e2e; fi
+        env:
+          ALDER_BIN: ${{ runner.temp }}/bin/alder
+          ALDER_REPO: ${{ github.workspace }}/alder
+          VSCODE_VERSION: ${{ matrix.vscode }}
+      - name: package
+        if: matrix.package
+        run: npm run package
+      - uses: actions/upload-artifact@v4
+        if: matrix.package
+        with:
+          name: vsix
+          path: '*.vsix'
