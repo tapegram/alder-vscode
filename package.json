@@ -19,6 +19,12 @@
   "activationEvents": [
     "onLanguage:alder"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "alder.path and alder.serverEnv choose the binary the extension runs and its environment."
+    }
+  },
   "contributes": {
     "languages": [
       {

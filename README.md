@@ -35,6 +35,8 @@ The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's s
 configured model: set `ANTHROPIC_API_KEY` (and optionally `ALDER_FILL_MODEL`), or
 `ALDER_FILL_COMMAND` to a command that reads the prompt on stdin, in the environment VS Code
 starts from or in `alder.serverEnv`.
+Put `ANTHROPIC_API_KEY` in your user settings or your shell's environment, never in a
+committed `.vscode/settings.json`.
 
 ## Development
 
