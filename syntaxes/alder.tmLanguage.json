@@ -1,0 +1,94 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Alder",
+  "scopeName": "source.alder",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#tag" },
+    { "include": "#hole" },
+    { "include": "#number" },
+    { "include": "#boolean" },
+    { "include": "#keyword" },
+    { "include": "#operator" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comment": { "name": "comment.line.double-dash.alder", "match": "--.*$" },
+    "string": {
+      "name": "string.quoted.double.alder",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.alder", "match": "\\\\." },
+        {
+          "name": "meta.embedded.interpolation.alder",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.alder" } },
+          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.alder" } },
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
+    },
+    "braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.bracket.alder" } },
+      "endCaptures": { "0": { "name": "punctuation.bracket.alder" } },
+      "patterns": [{ "include": "$self" }]
+    },
+    "tag": {
+      "patterns": [
+        {
+          "match": "(</)([A-Za-z][\\w.-]*)\\s*(>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.tag.alder" },
+            "2": { "name": "entity.name.tag.alder" },
+            "3": { "name": "punctuation.definition.tag.alder" }
+          }
+        },
+        {
+          "begin": "(<)([A-Za-z][\\w.-]*)(?=[\\s/>])",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.alder" },
+            "2": { "name": "entity.name.tag.alder" }
+          },
+          "end": "/?>",
+          "endCaptures": { "0": { "name": "punctuation.definition.tag.alder" } },
+          "patterns": [
+            { "name": "entity.other.attribute-name.alder", "match": "[A-Za-z_][\\w:-]*(?=\\s*=)" },
+            { "include": "#string" },
+            { "include": "#braces" },
+            { "name": "keyword.operator.alder", "match": "=" }
+          ]
+        }
+      ]
+    },
+    "hole": { "name": "variable.language.hole.alder", "match": "\\?[a-z]\\w*" },
+    "number": { "name": "constant.numeric.alder", "match": "\\b\\d+(\\.\\d+)?\\b" },
+    "boolean": { "name": "constant.language.boolean.alder", "match": "\\b(True|False)\\b" },
+    "keyword": {
+      "patterns": [
+        { "name": "keyword.control.import.alder", "match": "\\b(module|import|as)\\b" },
+        { "name": "storage.type.alder", "match": "\\b(type|brand|where|page|msg|form|table|capability|fake|session|login|test|requires)\\b" },
+        { "name": "storage.type.alder", "match": "^(deploy|theme|silo)\\b" },
+        { "name": "keyword.control.conditional.alder", "match": "\\b(if|then|else|match)\\b" },
+        { "name": "keyword.control.loop.alder", "match": "\\b(for|in)\\b" },
+        { "name": "keyword.other.alder", "match": "\\blet\\b" }
+      ]
+    },
+    "operator": {
+      "name": "keyword.operator.alder",
+      "match": "\\|>|->|<-|==|!=|<=|>=|\\+\\+|&&|\\|\\||\\?\\?|\\.\\.|[=+\\-*/%<>|\\\\]"
+    },
+    "punctuation": {
+      "patterns": [
+        { "include": "#braces" },
+        { "name": "punctuation.bracket.alder", "match": "[()\\[\\]]" },
+        { "name": "punctuation.separator.alder", "match": "[,:]" },
+        { "name": "punctuation.accessor.alder", "match": "\\." }
+      ]
+    }
+  }
+}
