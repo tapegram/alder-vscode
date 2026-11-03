@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appliedMessage, deletePrompt, firstRemoved, firstStale, landing, staleMessage } from '../../src/generate/planCheck';
+import { appliedMessage, deletePrompt, removedPaths, firstStale, landing, staleMessage } from '../../src/generate/planCheck';
 import type { PlanFile, PlanResult } from '../../src/generate/types';
 
 const files: PlanFile[] = [
@@ -16,11 +16,14 @@ test('planCheck: firstStale compares every file with its before; a created file 
   assert.equal(await firstStale(files, async p => (p === 'app/New.alder' ? '' : disk[p] ?? null)), 'app/New.alder');
 });
 
-test('planCheck: firstRemoved and the messages', () => {
-  assert.equal(firstRemoved(files), 'app/Old.alder');
-  assert.equal(firstRemoved(files.slice(0, 2)), undefined);
+test('planCheck: removedPaths and the messages', () => {
+  assert.deepEqual(removedPaths(files), ['app/Old.alder']);
+  assert.deepEqual(removedPaths(files.slice(0, 2)), []);
+  const two: PlanFile = { path: 'app/Old2.alder', action: 'removed', before: 'old2\n', after: null };
+  assert.deepEqual(removedPaths([...files, two]), ['app/Old.alder', 'app/Old2.alder']);
   assert.equal(staleMessage('app/A.alder'), 'alder: app/A.alder changed since planning; nothing applied');
-  assert.equal(deletePrompt('app/Old.alder'), 'Delete app/Old.alder from disk? undo cannot restore it');
+  assert.equal(deletePrompt(['app/Old.alder']), 'Delete app/Old.alder from disk? undo cannot restore it');
+  assert.equal(deletePrompt(['app/Old.alder', 'app/Old2.alder']), 'Delete app/Old.alder, app/Old2.alder from disk? undo cannot restore it');
   const plan: PlanResult = { files, holes: [] };
   assert.equal(appliedMessage('remove page', plan), 'alder: applied remove page: app/A.alder, app/New.alder, app/Old.alder');
   const hole = { name: 'h', type: 'Int', module: 'A', decl: 'view', file: 'app/A.alder', line: 4, col: 7 };

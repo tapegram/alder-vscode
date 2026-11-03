@@ -20,6 +20,11 @@ export class VirtualDocs implements vscode.TextDocumentContentProvider {
     return uri;
   }
 
+  // delete forgets a path's text (its document, if still open, reads as empty).
+  delete(path: string): void {
+    this.texts.delete(vscode.Uri.from({ scheme: DOC_SCHEME, path: '/' + path }).path);
+  }
+
   provideTextDocumentContent(uri: vscode.Uri): string {
     return this.texts.get(uri.path) ?? '';
   }

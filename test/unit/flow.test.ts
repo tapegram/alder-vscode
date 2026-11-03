@@ -284,6 +284,9 @@ test('flow: review shows the plan, applies with the planned sets; back keeps the
   await tick();
   assert.deepEqual(s.shownFiles, ['app/Posts/Index.alder']);
   assert.ok(!s.ui.forms.at(-1)!.closed, 'back reopened the form');
+  // the review's diff covered the preview: back shows the last preview again
+  assert.deepEqual(s.sink.shown.at(-1), s.sink.shown.at(-2));
+  assert.ok(s.sink.shown.at(-1)!.includes('+b'));
   s.ui.onReview = () => 'apply';
   void s.flow.answer({ kind: 'review' });
   await tick();
@@ -421,4 +424,20 @@ test('flow: typing sends one debounced preview with the last sets', async () => 
   assert.equal(previews.length, 1);
   assert.deepEqual(previews[0].params.sets, { page: 'Posts.Index', name: 'AB' });
   flow.close();
+});
+
+test('flow: an apply that throws is an error, and the flow still ends', async () => {
+  const server = new FakeServer();
+  const ui = new FakeUi();
+  ui.onPick = rows => rows.flatMap(x => ('item' in x ? [x.item] : [])).find(g => g.id === 'new msg');
+  const flow = new Flow({ server, ui, preview: new FakeSink(), apply: async () => { throw new Error('boom'); }, showPlanFile: () => {}, debounceMs: 0 }, origin);
+  void flow.start();
+  await tick();
+  server.take('alder/generators').resolve({ generators: [msg, page] });
+  await tick();
+  server.take('alder/preview').resolve(ready([nameYou('Delete')]));
+  await tick();
+  await flow.answer({ kind: 'apply' });
+  await flow.done;
+  assert.equal(ui.log.at(-1), 'error alder: boom');
 });

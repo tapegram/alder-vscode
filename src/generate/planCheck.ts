@@ -1,10 +1,10 @@
 import type { PlanFile, PlanResult } from './types';
 
-// planCheck: the pure half of apply.lua: whether the files still read as planned, the file a
+// planCheck: the pure half of apply.lua: whether the files still read as planned, the files a
 // plan removes, where the cursor lands after applying, and the messages.
 
 export const staleMessage = (path: string) => `alder: ${path} changed since planning; nothing applied`;
-export const deletePrompt = (path: string) => `Delete ${path} from disk? undo cannot restore it`;
+export const deletePrompt = (paths: string[]) => `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
 
 // firstStale is the first file whose text as the user sees it (textOf: the open document's,
 // else the file's, else null) is not its planned before (null for a created file: it must not exist).
@@ -15,8 +15,9 @@ export async function firstStale(files: PlanFile[], textOf: (rel: string) => Pro
   return undefined;
 }
 
-export function firstRemoved(files: PlanFile[]): string | undefined {
-  return files.find(f => f.after === null)?.path;
+// removedPaths are the files a plan deletes, in plan order: the confirm names every one.
+export function removedPaths(files: PlanFile[]): string[] {
+  return files.filter(f => f.after === null).map(f => f.path);
 }
 
 export type Landing = { kind: 'hole'; file: string; line: number; col: number } | { kind: 'file'; path: string };

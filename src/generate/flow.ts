@@ -93,6 +93,8 @@ export class Flow {
   private view: FormView | undefined;
   private textView: { name: string; view: TextView } | undefined;
   private dirs: string[] | undefined;
+  // shownPreview: the last preview painted, shown again after the review (its diff covered it)
+  private shownPreview: { lines: string[]; hunk: number } | undefined;
 
   constructor(private readonly env: FlowEnv, private readonly origin: Origin) {
     this.done = new Promise(r => { this.finish = r; });
@@ -142,6 +144,7 @@ export class Flow {
     this.fields = [];
     this.active = undefined;
     this.fillFirst = true;
+    this.shownPreview = undefined;
     this.env.preview.show([], 0);
     this.openForm();
     void this.sendPreview();
@@ -234,7 +237,8 @@ export class Flow {
     if (r.fields) this.fields = visible(r.fields);
     this.ready = r.ready === true;
     const lines = render(r);
-    this.env.preview.show(lines, firstHunk(lines));
+    this.shownPreview = { lines, hunk: firstHunk(lines) };
+    this.env.preview.show(lines, this.shownPreview.hunk);
     if (this.textView) this.textView.view.setValidation(this.whyOf(this.textView.name));
     this.render();
     if (this.fillFirst) {
@@ -342,6 +346,8 @@ export class Flow {
     this.teardown();
     try {
       await this.env.apply(id, s);
+    } catch (err) {
+      this.env.ui.error(`alder: ${message(err)}`);
     } finally {
       this.finish();
     }
@@ -378,6 +384,7 @@ export class Flow {
     }
     if (this.closed) return;
     if (choice === 'apply' && m.canApply) return this.applyWith(sel.id, planned);
+    if (this.shownPreview) this.env.preview.show(this.shownPreview.lines, this.shownPreview.hunk);
     this.openForm();
   }
 

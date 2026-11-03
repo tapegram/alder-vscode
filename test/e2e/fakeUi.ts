@@ -12,7 +12,7 @@ export class FakeUi implements FlowUi, ApplyUi {
   onPick: (rows: PickerRow[]) => Generator | undefined = () => undefined;
   onPickOne: (o: { title: string; items: string[]; active?: string }) => string | undefined = () => undefined;
   onModule: (o: { value: string }) => string | undefined = () => undefined;
-  onReview: (m: ReviewModel, o: { onActive(f: ReviewFile): void }) => 'apply' | 'back' = () => 'back';
+  onReview: (m: ReviewModel, o: { onActive(f: ReviewFile): void }) => 'apply' | 'back' | Promise<'apply' | 'back'> = () => 'back';
   onConfirm: (message: string, action: string) => Promise<boolean> | boolean = () => false;
 
   info(m: string) { this.log.push(`info ${m}`); }

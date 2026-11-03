@@ -53,6 +53,36 @@ describe('Generate: the flow', () => {
     }
   });
 
+  it('review then back shows the live preview again; the flow\'s end closes the plan diff', async () => {
+    const editor = await open('gen/app/Posts/Index.alder');
+    const p = at(editor.document, 'load params');
+    editor.selection = new vscode.Selection(p, p);
+    await goodBuild(editor);
+    const isPreview = (u: vscode.Uri) => u.path.endsWith('Generate Preview.diff');
+    const isPlan = (t: vscode.Tab) => t.input instanceof vscode.TabInputTextDiff && t.input.modified.path.startsWith('/plan/');
+    const tabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    const ui = new FakeUi();
+    ui.onPick = rows => rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new msg');
+    ui.onReview = async (m, o) => {
+      o.onActive(m.files[0]);
+      // the plan diff opens beside, in front of the preview
+      await until(() => tabs().some(t => isPlan(t) && t.isActive), 'the plan diff in front');
+      await until(() => !vscode.window.visibleTextEditors.some(e => isPreview(e.document.uri)), 'the diff to cover the preview');
+      return 'back' as const;
+    };
+    const running = vscode.commands.executeCommand('alder.generate', undefined, ui);
+    const name = await until(() => ui.texts.find(t => t.title === 'new msg: name'), 'the name editor');
+    name.finish('Delete');
+    const form = await until(() => (ui.openForm?.model.ready && !ui.openForm.model.updating ? ui.openForm : undefined), 'a ready form');
+    form.answer({ kind: 'review' });
+    await until(() => (ui.openForm && ui.openForm !== form ? ui.openForm : undefined), 'the form again after back');
+    await until(() => vscode.window.visibleTextEditors.some(e => isPreview(e.document.uri)), 'the preview visible again');
+    ui.openForm!.answer({ kind: 'escape' });
+    await running;
+    await until(() => !tabs().some(isPlan), 'the plan diff to close');
+    await until(() => !tabs().some(t => t.label.includes('Generate Preview')), 'the preview tab to close');
+  });
+
   it('a code action preset opens the form without the picker', async () => {
     const editor = await open('gen/app/Posts/Index.alder');
     const doc = editor.document;

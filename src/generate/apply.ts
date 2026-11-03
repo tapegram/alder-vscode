@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import * as vscode from 'vscode';
 import type { ApplyUi, Origin, Server } from './flow';
-import { appliedMessage, deletePrompt, firstRemoved, firstStale, landing, staleMessage } from './planCheck';
+import { appliedMessage, deletePrompt, firstStale, landing, removedPaths, staleMessage } from './planCheck';
 import type { PlanDiagnostic, PlanResult, Sets } from './types';
 
 // apply: the port of apply.lua. It plans the generator again with the sets the user saw, checks
@@ -61,10 +61,12 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
     return !stale;
   };
   if (!(await unchanged())) return false;
-  const removed = firstRemoved(files);
-  if (removed && (!(await env.ui.confirm(deletePrompt(removed), 'Delete')) || !(await unchanged()))) return false;
+  const removed = removedPaths(files);
+  if (removed.length > 0 && (!(await env.ui.confirm(deletePrompt(removed), 'Delete')) || !(await unchanged()))) return false;
 
   const edit = new vscode.WorkspaceEdit();
+  // versions: each replaced document's version when its range was taken
+  const versions: { path: string; doc: vscode.TextDocument; version: number }[] = [];
   for (const f of files) {
     const uri = vscode.Uri.file(join(env.root, f.path));
     if (f.after === null) {
@@ -74,12 +76,20 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
       edit.insert(uri, new vscode.Position(0, 0), f.after);
     } else {
       const doc = await vscode.workspace.openTextDocument(uri);
+      versions.push({ path: f.path, doc, version: doc.version });
       edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), f.after);
     }
   }
   // building the edit awaited openTextDocument and replace took each document's range then:
   // check once more right before applying, so nothing typed meanwhile is overwritten
   if (!(await unchanged())) return false;
+  // unchanged awaited (a created file reads the disk): after the last await, check synchronously
+  // that no replaced document moved past the version its range was taken at
+  const moved = versions.find(v => v.doc.version !== v.version);
+  if (moved) {
+    env.ui.error(staleMessage(moved.path));
+    return false;
+  }
   if (!(await vscode.workspace.applyEdit(edit))) {
     env.ui.error(`alder: ${id} could not be applied; nothing applied`);
     return false;
