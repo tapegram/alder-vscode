@@ -4,7 +4,6 @@ import { findRoot } from './root';
 // NOT_YET are the commands later milestones fill in (5: the generator flow; 6: scratch). Each says so when run.
 export const NOT_YET: Record<string, string> = {
   'alder.generate': 'Generate',
-  'alder.routes': 'Routes',
   'alder.run': 'Run',
   'alder.test.run': 'Run Tests',
   'alder.test.runAtCursor': 'Run Test at Cursor',

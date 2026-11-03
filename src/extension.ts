@@ -5,11 +5,16 @@ import { registerNotYet, trackProject } from './commands';
 import { Deps } from './deps';
 import { explainDiagnostic } from './explain';
 import { report } from './health';
+import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
 import { VirtualDocs } from './virtualDocs';
 
 export interface Api {
   clients: Clients;
   docs: VirtualDocs;
+  routes: {
+    fetch(root: string): Promise<Fetched>;
+    fetchCli(root: string, lspError?: string): Promise<Fetched>;
+  };
   health(): Promise<string[]>;
 }
 
@@ -39,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       output.show(true);
     }),
     vscode.commands.registerCommand('alder.explainDiagnostic', (code?: unknown) => explainDiagnostic(deps, typeof code === 'string' ? code : undefined)),
+    vscode.commands.registerCommand('alder.routes', (ui?: RouteUi) => pickRoutes(deps, ui && typeof ui.pick === 'function' ? ui : undefined)),
     vscode.commands.registerCommand('alder.restartServer', () => cs.restart()),
     vscode.workspace.onDidOpenTextDocument(doc => void cs.ensure(doc)),
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -50,7 +56,12 @@ export function activate(context: vscode.ExtensionContext): Api {
   registerNotYet(context);
   trackProject(context);
   for (const doc of vscode.workspace.textDocuments) void cs.ensure(doc);
-  return { clients: cs, docs, health };
+  return {
+    clients: cs,
+    docs,
+    routes: { fetch: root => fetchRoutes(deps, root), fetchCli: (root, e) => fetchCli(deps, root, e) },
+    health,
+  };
 }
 
 export async function deactivate(): Promise<void> {
