@@ -49,6 +49,9 @@ export function run(bin: string, args: string[], o: RunOptions): Promise<CliResu
     const finish = (code: number | null, signal: NodeJS.Signals | null) => {
       if (settled) return;
       settled = true;
+      // let go of pipes an orphaned grandchild may still hold
+      child.stdout.destroy();
+      child.stderr.destroy();
       o.signal?.removeEventListener('abort', onAbort);
       const objects = decode(stdout);
       resolve({ code, signal, stdout, stderr, objects, json: objects[0], cancelled: cancelled() });
@@ -62,6 +65,9 @@ export function run(bin: string, args: string[], o: RunOptions): Promise<CliResu
       finish(null, null);
     });
     child.on('close', (code, signal) => finish(code, signal));
+    // an aborted alder may leave a child holding its pipes open, so close never comes: the
+    // cancelled run's output is discarded anyway, settle on exit
+    child.on('exit', (code, signal) => { if (cancelled()) finish(code, signal); });
     if (o.signal?.aborted) onAbort();
     else o.signal?.addEventListener('abort', onAbort, { once: true });
   });

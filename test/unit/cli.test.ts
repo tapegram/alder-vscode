@@ -96,3 +96,14 @@ test('shellQuote leaves plain paths alone and single-quotes the rest', () => {
   assert.equal(shellQuote('/Users/a b/alder'), `'/Users/a b/alder'`);
   assert.equal(shellQuote(`/x/it's`), `'/x/it'\\''s'`);
 });
+
+test('a cancelled run settles on exit, not waiting for a child that holds its pipes', async () => {
+  const bin = fake('sleep 30');
+  const ac = new AbortController();
+  const p = run(bin, [], { cwd: dir(), signal: ac.signal });
+  setTimeout(() => ac.abort(), 100);
+  const started = Date.now();
+  const r = await p;
+  assert.equal(r.cancelled, true);
+  assert.ok(Date.now() - started < 5000, 'settled late');
+});
