@@ -43,6 +43,27 @@ export class Clients {
     return this.gate;
   }
 
+  // binary is the alder binary the gate resolved, or undefined after reporting a failed gate
+  // (once, as ensure does). The CLI commands run this path, never a bare `alder`.
+  async binary(): Promise<string | undefined> {
+    const gate = await this.checkGate();
+    if (!gate.ok || !gate.path) {
+      this.reportGate(gate);
+      return undefined;
+    }
+    return gate.path;
+  }
+
+  // clientFor is the client of uri's root when uri is given; else the active editor's root's,
+  // else the only one running.
+  async clientFor(uri?: vscode.Uri | string): Promise<LanguageClient | undefined> {
+    if (uri !== undefined) return this.forUri(uri);
+    const active = vscode.window.activeTextEditor?.document.uri;
+    const client = active ? await this.forUri(active) : undefined;
+    if (client) return client;
+    return this.byReal.size === 1 ? [...this.byReal.values()][0].client : undefined;
+  }
+
   // ensure starts (or reuses) the client of the document's root; undefined when the document
   // is not an alder file under an app root, the binary failed the gate, or the root's client
   // failed to start (reported once; retried only by restart()).
@@ -150,15 +171,7 @@ export class Clients {
   // execute sends a server command to the server of the document it names; a command that
   // names no document goes to the active editor's server, else the only one running.
   async execute(command: string, args: unknown[]): Promise<unknown> {
-    const named = commandUri(args);
-    let client: LanguageClient | undefined;
-    if (named !== undefined) {
-      client = await this.forUri(named);
-    } else {
-      const active = vscode.window.activeTextEditor?.document.uri;
-      client = active ? await this.forUri(active) : undefined;
-      if (!client && this.byReal.size === 1) client = [...this.byReal.values()][0].client;
-    }
+    const client = await this.clientFor(commandUri(args));
     if (!client) {
       void vscode.window.showErrorMessage('alder: no alder lsp running for this file');
       return undefined;

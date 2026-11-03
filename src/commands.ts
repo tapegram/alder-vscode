@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
 import { findRoot } from './root';
 
-// NOT_YET are the commands later milestones fill in (4: routes, run, explain, tests; 5: the
-// generator flow; 6: scratch). Each says so when run.
+// NOT_YET are the commands later milestones fill in (5: the generator flow; 6: scratch). Each says so when run.
 export const NOT_YET: Record<string, string> = {
   'alder.generate': 'Generate',
   'alder.routes': 'Routes',
   'alder.run': 'Run',
-  'alder.explainDiagnostic': 'Explain Diagnostic',
   'alder.test.run': 'Run Tests',
   'alder.test.runAtCursor': 'Run Test at Cursor',
   'alder.test.mutate': 'Mutation Testing',
