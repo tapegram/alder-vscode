@@ -1,0 +1,284 @@
+{
+  "name": "alder",
+  "displayName": "Alder",
+  "description": "Alder language support: the alder lsp server in VS Code",
+  "publisher": "tapegram",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tapegram/alder-vscode"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:alder"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "alder.path and alder.serverEnv choose the binary the extension runs and its environment."
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "alder",
+        "aliases": [
+          "Alder",
+          "alder"
+        ],
+        "extensions": [
+          ".alder"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "alder",
+        "scopeName": "source.alder",
+        "path": "./syntaxes/alder.tmLanguage.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "tag",
+        "superType": "type",
+        "description": "An element's tag name"
+      },
+      {
+        "id": "attribute",
+        "superType": "type",
+        "description": "An element's attribute name"
+      },
+      {
+        "id": "boolean",
+        "superType": "enumMember",
+        "description": "True or False"
+      },
+      {
+        "id": "hole",
+        "superType": "variable",
+        "description": "A typed hole (?h)"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "alder",
+        "scopes": {
+          "tag": [
+            "entity.name.tag.alder"
+          ],
+          "attribute": [
+            "entity.other.attribute-name.alder"
+          ],
+          "boolean": [
+            "constant.language.boolean.alder"
+          ],
+          "hole": [
+            "variable.language.hole.alder"
+          ]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[alder]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.semanticHighlighting.enabled": true
+      }
+    },
+    "configuration": {
+      "title": "Alder",
+      "properties": {
+        "alder.path": {
+          "type": "string",
+          "default": "alder",
+          "markdownDescription": "The `alder` binary: an absolute path, or a name looked up on `PATH`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and `~/bin`."
+        },
+        "alder.serverEnv": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Environment for `alder lsp`, over VS Code's own: for example `ANTHROPIC_API_KEY`, `ALDER_FILL_MODEL`, `ALDER_FILL_COMMAND`, `ALDER_LSP_LOG`."
+        },
+        "alder.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the LSP traffic with alder lsp into the Alder output channel."
+        },
+        "alder.test.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra arguments for `alder test`."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "alder.generate",
+        "title": "Generate…",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.routes",
+        "title": "Routes",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.run",
+        "title": "Run the App",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.explainDiagnostic",
+        "title": "Explain Diagnostic",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.test.run",
+        "title": "Run Tests",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.test.runAtCursor",
+        "title": "Run Test at Cursor",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.test.mutate",
+        "title": "Mutation Testing",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.scratch.open",
+        "title": "Open Scratch",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.scratch.send",
+        "title": "Send to Scratch",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.scratch.openValue",
+        "title": "Open Scratch Value",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.showHealth",
+        "title": "Show Health",
+        "category": "Alder"
+      },
+      {
+        "command": "alder.restartServer",
+        "title": "Restart Server",
+        "category": "Alder"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "alder.generate",
+        "key": "ctrl+alt+a g",
+        "mac": "cmd+alt+a g",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.routes",
+        "key": "ctrl+alt+a u",
+        "mac": "cmd+alt+a u",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.run",
+        "key": "ctrl+alt+a r",
+        "mac": "cmd+alt+a r",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.test.run",
+        "key": "ctrl+alt+a t",
+        "mac": "cmd+alt+a t",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.scratch.open",
+        "key": "ctrl+alt+a x",
+        "mac": "cmd+alt+a x",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.explainDiagnostic",
+        "key": "ctrl+alt+a e",
+        "mac": "cmd+alt+a e",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.test.runAtCursor",
+        "key": "ctrl+alt+a shift+t",
+        "mac": "cmd+alt+a shift+t",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.test.mutate",
+        "key": "ctrl+alt+a m",
+        "mac": "cmd+alt+a m",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.scratch.send",
+        "key": "ctrl+alt+a s",
+        "mac": "cmd+alt+a s",
+        "when": "editorLangId == alder"
+      },
+      {
+        "command": "alder.scratch.openValue",
+        "key": "ctrl+alt+a o",
+        "mac": "cmd+alt+a o",
+        "when": "editorLangId == alder"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "compile": "tsc -p .",
+    "lint": "tsc -p . --noEmit && eslint .",
+    "test:unit": "tsc -p . && node --test \"out/test/unit/**/*.test.js\"",
+    "test:e2e": "npm run build && tsc -p . && node out/test/e2e/run.js",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "1.91.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "mocha": "^11.8.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}
