@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { findRoot } from './root';
 
-// NOT_YET are the commands later milestones fill in (5: the generator flow; 6: scratch). Each says so when run.
+// NOT_YET are the commands a later milestone fills in (6: scratch). Each says so when run.
 export const NOT_YET: Record<string, string> = {
-  'alder.generate': 'Generate',
   'alder.scratch.open': 'Open Scratch',
   'alder.scratch.send': 'Send to Scratch',
   'alder.scratch.openValue': 'Open Scratch Value',

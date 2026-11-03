@@ -33,6 +33,11 @@ Platforms: macOS and Linux. Windows is untested, and binary discovery does not l
 
 All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a` on macOS).
 
+- **Generate** (`g`): pick a generator (the ones that apply at the cursor first), fill in its
+  form while a diff preview updates beside it, review the plan (the diff button), and apply
+  (Enter on Apply, or `ctrl+enter` / `cmd+enter` from any field). The result is one undo step:
+  edited and new files are left unsaved, and a file the generator removes is deleted only after
+  you confirm. The generator code actions (the lightbulb) open the same flow, already filled in.
 - **Routes** (`u`): the app's pages and messages; pick one to open its declaration.
 - **Run the App** (`r`): `alder run` in a terminal at the app root, reused while it is open.
 - **Explain Diagnostic** (`e`): the explanation of the diagnostic under the cursor (or a code you

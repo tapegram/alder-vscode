@@ -53,7 +53,8 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
     return false;
   }
   const files = plan.files ?? [];
-  // unchanged runs again after the delete confirm: the user may type while it is open
+  // unchanged runs again after the delete confirm (the user may type while it is open) and
+  // right before the edit is applied
   const unchanged = async () => {
     const stale = await firstStale(files, rel => textOf(join(env.root, rel)));
     if (stale) env.ui.error(staleMessage(stale));
@@ -76,6 +77,9 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
       edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), f.after);
     }
   }
+  // building the edit awaited openTextDocument and replace took each document's range then:
+  // check once more right before applying, so nothing typed meanwhile is overwritten
+  if (!(await unchanged())) return false;
   if (!(await vscode.workspace.applyEdit(edit))) {
     env.ui.error(`alder: ${id} could not be applied; nothing applied`);
     return false;

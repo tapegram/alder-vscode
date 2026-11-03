@@ -65,7 +65,7 @@ describe('Generate: apply', () => {
     }
   });
 
-  it('a refusal is the server text, its diagnostics go to the alder generate collection, nothing changes', async () => {
+  it('a refusal is the server text, the alder generate collection stays empty (it carries no diagnostics), nothing changes', async () => {
     const { origin, editor } = await originAt('app/Posts/Index.alder');
     const before = editor.document.getText();
     const ui = new FakeUi();
@@ -74,6 +74,10 @@ describe('Generate: apply', () => {
     assert.match(ui.log[0], /^error .*Posts\.Index/);
     assert.equal(editor.document.getText(), before);
     assert.ok(!editor.document.isDirty);
+    // this refusal (the module exists) carries no plan.diagnostics, so the collection stays empty
+    const left: string[] = [];
+    (await api()).generate.diagnostics.forEach((u, ds) => left.push(`${u.toString()}: ${ds.map(d => d.message).join(' | ')}`));
+    assert.deepEqual(left, []);
   });
 
   it('remove page asks; No applies nothing', async () => {
