@@ -37,9 +37,7 @@ describe('Generate: the flow', () => {
       name.finish('Delete');
       const form = await until(() => (ui.openForm?.model.ready ? ui.openForm : undefined), 'a ready form');
       assert.equal(form.model.rows.find(r => r.name === 'name')?.value, 'Delete');
-      const preview = vscode.workspace.textDocuments.find(d => d.uri.path.endsWith('Generate Preview.diff'));
-      assert.ok(preview, 'no preview document');
-      assert.ok(preview.getText().includes('Delete'), preview.getText());
+      await until(() => vscode.workspace.textDocuments.find(d => d.uri.path.endsWith('Generate Preview.diff'))?.getText().includes('Delete'), 'the preview document to reload with the Delete diff');
       form.answer({ kind: 'apply' });
       await running;
       assert.ok(ui.log.includes('info alder: applied new msg: app/Posts/Index.alder (2 holes)'), ui.log.join('\n'));
