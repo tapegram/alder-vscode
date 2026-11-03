@@ -1,7 +1,7 @@
 import { basename, join, sep } from 'node:path';
 import * as vscode from 'vscode';
 // runCli: `run` is the TestRun throughout this file
-import { run as runCli } from './cli';
+import { reportOf, run as runCli } from './cli';
 import { cliEnv, Deps } from './deps';
 import { requireRoot } from './project';
 import { showReport } from './report';
@@ -207,11 +207,24 @@ export class AlderTests {
     const run = this.controller.createTestRun(request, label(mode));
     const outcomes: RunOutcome[] = [];
     try {
-      for (const scope of this.scopes(request)) outcomes.push(await this.runRoot(run, scope, mode, token));
+      for (const scope of this.scopes(request)) {
+        if (token.isCancellationRequested || run.token.isCancellationRequested) {
+          outcomes.push(this.cancelled(run, scope, mode));
+          continue;
+        }
+        outcomes.push(await this.runRoot(run, scope, mode, token));
+      }
     } finally {
       run.end();
     }
     return outcomes;
+  }
+
+  // cancelled marks a root's tests skipped and says so: the outcome of a run stopped before it spawned.
+  private cancelled(run: vscode.TestRun, scope: Scope, mode: Mode): RunOutcome {
+    for (const l of scope.leaves) run.skipped(l);
+    run.appendOutput(`${label(mode)}: cancelled\r\n`);
+    return { root: scope.root, kind: 'cancelled', results: [] };
   }
 
   // saveUnder saves the dirty alder documents under the root (the run reads disk) and returns
@@ -238,7 +251,10 @@ export class AlderTests {
     }
     const ac = new AbortController();
     this.inFlight.set(key, ac);
-    const sub = token.onCancellationRequested(() => ac.abort());
+    // "Cancel Test Run" fires the TestRun's own token; the caller's token (a command's, or the
+    // profile handler's) fires too
+    const subs = [token.onCancellationRequested(() => ac.abort()), run.token.onCancellationRequested(() => ac.abort())];
+    const stopped = () => ac.signal.aborted || token.isCancellationRequested || run.token.isCancellationRequested;
     const outcome: RunOutcome = { root: scope.root, kind: 'report', results: [] };
     try {
       for (const l of scope.leaves) run.enqueued(l);
@@ -248,7 +264,9 @@ export class AlderTests {
         void vscode.window.showWarningMessage(msg);
         run.appendOutput(msg + '\r\n');
       }
+      if (stopped()) return this.cancelled(run, scope, mode);
       const bin = await this.deps.clients.binary();
+      if (stopped()) return this.cancelled(run, scope, mode);
       if (!bin) {
         run.errored(scope.rootItem, new vscode.TestMessage('the alder binary failed its check — Alder: Show Health'));
         return outcome;
@@ -258,6 +276,9 @@ export class AlderTests {
       // the root as `.` (cwd is the root): alder globs migrations/*.sql under the path it is
       // given unescaped, so an absolute root holding a glob metacharacter ([, *, ?) finds none
       args.push(...vscode.workspace.getConfiguration('alder').get<string[]>('test.args', []), '.');
+      // the reproducer shown in a bug report names the real root, not `.`
+      const shown = [...args.slice(0, -1), scope.real];
+      if (stopped()) return this.cancelled(run, scope, mode);
       for (const l of scope.leaves) run.started(l);
       if (mode === 'mutate') this.clearSurvivors(scope.real);
       const res = await runCli(bin, args, { cwd: scope.real, env: cliEnv(), signal: ac.signal });
@@ -277,9 +298,10 @@ export class AlderTests {
       }
       if (kind === 'report') {
         for (const l of scope.leaves) run.skipped(l);
-        const text = (res.stderr.trim() || res.stdout.trim() || `${title} failed`).split('\n')[0];
+        const rep = reportOf(args, res);
+        const text = rep.kind === 'error' ? rep.message : (res.stderr.trim() || res.stdout.trim() || `${title} failed`).split('\n')[0];
         run.errored(scope.rootItem, new vscode.TestMessage(text));
-        await showReport(this.deps, args, res);
+        await showReport(this.deps, shown, res);
         return outcome;
       }
       const results = resultsOf(res.objects);
@@ -301,7 +323,7 @@ export class AlderTests {
       }
       return outcome;
     } finally {
-      sub.dispose();
+      for (const s of subs) s.dispose();
       if (this.inFlight.get(key) === ac) this.inFlight.delete(key);
     }
   }
@@ -358,7 +380,12 @@ export class AlderTests {
     const root = await requireRoot(this.deps.clients);
     if (!root) return undefined;
     const rootItem = await this.rootItem(root, await realRoot(root));
-    return this.execute(new vscode.TestRunRequest([rootItem]), mode, new vscode.CancellationTokenSource().token);
+    const src = new vscode.CancellationTokenSource();
+    try {
+      return await this.execute(new vscode.TestRunRequest([rootItem]), mode, src.token);
+    } finally {
+      src.dispose();
+    }
   }
 
   // runAtCursor runs the test above the cursor, else the file's module, else (no module line)
@@ -379,6 +406,11 @@ export class AlderTests {
     const name = testAt(doc.getText(), editor.selection.active.line);
     if (name === undefined) void vscode.window.showInformationMessage(`alder test: no test above the cursor; running ${found.module}'s tests`);
     const item = name === undefined ? mod : this.testItem(mod, name, doc.uri, found.tests.find(t => t.name === name)?.line);
-    return this.execute(new vscode.TestRunRequest([item]), 'test', new vscode.CancellationTokenSource().token);
+    const src = new vscode.CancellationTokenSource();
+    try {
+      return await this.execute(new vscode.TestRunRequest([item]), 'test', src.token);
+    } finally {
+      src.dispose();
+    }
   }
 }

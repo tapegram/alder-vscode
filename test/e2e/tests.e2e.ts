@@ -75,6 +75,27 @@ describe('the Test Explorer', () => {
     assert.equal(b.kind, 'results', JSON.stringify(b));
   });
 
+  it('Cancel Test Run (the TestRun\'s own token) cancels a run started from a command', async () => {
+    await open('demo/app/Demo.alder');
+    const started = vscode.commands.executeCommand<RunOutcome[]>('alder.test.run');
+    await new Promise(r => setTimeout(r, 300));
+    await vscode.commands.executeCommand('testing.cancelRun');
+    const [o] = await started;
+    assert.equal(o.kind, 'cancelled', JSON.stringify(o));
+  });
+
+  it('a token cancelled before the run starts its work cancels it without spawning', async () => {
+    await open('demo/app/Demo.alder');
+    const t = (await api()).tests;
+    const root = t.item(demo());
+    assert.ok(root);
+    const src = new vscode.CancellationTokenSource();
+    src.cancel();
+    const [o] = await t.execute(new vscode.TestRunRequest([root]), 'test', src.token);
+    assert.equal(o.kind, 'cancelled', JSON.stringify(o));
+    assert.equal(o.results.length, 0);
+  });
+
   it('mutation testing a passing test puts the survivors in Problems', async function () {
     this.timeout(180_000);
     await open('demo/app/Demo.alder');
