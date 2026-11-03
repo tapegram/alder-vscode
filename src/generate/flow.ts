@@ -86,6 +86,9 @@ export class Flow {
   private ready = false;
   private updating = false;
   private fillFirst = false;
+  // busy: a field editor or the review is up. A second quick input would hide it, and the
+  // hidden one's tail would reopen the form, so nothing else opens one meanwhile.
+  private busy = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private view: FormView | undefined;
   private textView: { name: string; view: TextView } | undefined;
@@ -157,6 +160,7 @@ export class Flow {
 
   private openForm(): void {
     if (this.closed || !this.sel) return;
+    this.closeForm();
     this.view = this.env.ui.form(this.model(), a => void this.answer(a));
   }
 
@@ -235,13 +239,14 @@ export class Flow {
     this.render();
     if (this.fillFirst) {
       this.fillFirst = false;
-      const i = firstToFill(this.fields, this.typed);
+      const i = this.busy ? undefined : firstToFill(this.fields, this.typed);
       if (i !== undefined) void this.edit(this.fields[i].name);
     }
   }
 
   async answer(a: FormAnswer): Promise<void> {
     if (this.closed) return;
+    if (this.busy && (a.kind === 'field' || a.kind === 'apply' || a.kind === 'review')) return;
     switch (a.kind) {
       case 'escape':
         return this.close();
@@ -263,12 +268,23 @@ export class Flow {
   private async edit(name: string): Promise<void> {
     const sel = this.sel;
     const f = this.fields.find(x => x.name === name);
-    if (this.closed || !sel || !f) return;
+    if (this.closed || this.busy || !sel || !f) return;
     this.active = name;
     this.closeForm();
-    const ui = this.env.ui;
     const title = `${sel.id}: ${name}`;
     const now = current(f, this.typed);
+    this.busy = true;
+    try {
+      await this.editor(name, f, title, now);
+    } finally {
+      this.busy = false;
+    }
+    if (!this.closed && this.sel === sel) this.openForm();
+  }
+
+  // editor shows the field's editor and records its answer.
+  private async editor(name: string, f: FieldState, title: string, now: string): Promise<void> {
+    const ui = this.env.ui;
     switch (editorKind(f)) {
       case 'bool': {
         const v = await ui.pickOne({ title, items: ['on', 'off'], active: now === 'true' ? 'on' : 'off' });
@@ -307,7 +323,6 @@ export class Flow {
         break;
       }
     }
-    if (!this.closed && this.sel === sel) this.openForm();
   }
 
   // enter is modal.lua's enter: nothing while a preview is in flight (the sets on screen are not
@@ -346,14 +361,21 @@ export class Flow {
       return;
     }
     // the form changed while the plan was in flight: it is not the plan of what is on screen
-    if (this.closed || this.sel !== sel || !sameSets(planned, this.sets())) return;
+    // an editor opened while the plan was in flight: showing the review would hide it
+    if (this.closed || this.busy || this.sel !== sel || !sameSets(planned, this.sets())) return;
     const m = reviewModel(plan);
     if (m.files.length === 0 && m.canApply) {
       this.env.ui.info('alder: nothing to change');
       return;
     }
     this.closeForm();
-    const choice = await this.env.ui.review(m, { title: sel.id, onActive: f => this.env.showPlanFile(f) });
+    let choice: 'apply' | 'back';
+    this.busy = true;
+    try {
+      choice = await this.env.ui.review(m, { title: sel.id, onActive: f => this.env.showPlanFile(f) });
+    } finally {
+      this.busy = false;
+    }
     if (this.closed) return;
     if (choice === 'apply' && m.canApply) return this.applyWith(sel.id, planned);
     this.openForm();

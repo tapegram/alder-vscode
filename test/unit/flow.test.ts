@@ -354,3 +354,71 @@ test('flow: asPreset', () => {
   assert.equal(asPreset({ sets: {} }), undefined);
   assert.equal(asPreset(42), undefined);
 });
+
+test('flow: a field opened before the first preview keeps fillFirst from opening a second editor', async () => {
+  const s = setup();
+  s.ui.onPick = () => msg;
+  void s.flow.start();
+  await tick();
+  s.server.take('alder/generators').resolve({ generators: [msg] });
+  await tick();
+  const first = s.server.take('alder/preview');
+  // stands for a form row the user can pick while the first preview is in flight
+  s.flow['fields'] = [field({ name: 'title', help: 'the title' })];
+  void s.flow.answer({ kind: 'field', name: 'title' });
+  await tick();
+  assert.equal(s.ui.texts.length, 1);
+  first.resolve(ready([field({ name: 'title' }), nameDefault]));
+  await tick();
+  assert.equal(s.ui.texts.length, 1, 'fillFirst opened a second editor');
+  s.ui.texts[0].finish(undefined);
+  await tick();
+  assert.equal(s.ui.forms.filter(f => !f.closed).length, 1, 'exactly one form is open');
+  // fillFirst was cleared: a later answer opens nothing
+  s.flow['setField']('title', 'T');
+  await tick();
+  s.server.take('alder/preview').resolve(ready([field({ name: 'title', value: 'T', source: 'you' }), nameDefault]));
+  await tick();
+  assert.equal(s.ui.texts.length, 1);
+});
+
+test('flow: a plan that arrives while a field editor is up is dropped', async () => {
+  const s = await started();
+  void s.flow.answer({ kind: 'review' });
+  await tick();
+  const p = s.server.take('alder/plan');
+  void s.flow.answer({ kind: 'field', name: 'name' });
+  await tick();
+  assert.equal(s.ui.texts.length, 1);
+  p.resolve({ files: [{ path: 'app/Posts/Index.alder', action: 'edited', before: 'a', after: 'b' }], holes: [], error: '' });
+  await tick();
+  assert.ok(!s.ui.log.includes('review'));
+  // while the editor is up, the form's other answers are ignored
+  await s.flow.answer({ kind: 'apply' });
+  void s.flow.answer({ kind: 'review' });
+  await tick();
+  assert.equal(s.applied.length, 0);
+  assert.ok(!s.server.pending.some(x => x.method === 'alder/plan'));
+});
+
+test('flow: typing sends one debounced preview with the last sets', async () => {
+  const server = new FakeServer();
+  const ui = new FakeUi();
+  const sink = new FakeSink();
+  ui.onPick = () => msg;
+  const flow = new Flow({ server, ui, preview: sink, apply: async () => {}, showPlanFile: () => {}, debounceMs: 5 }, origin);
+  void flow.start();
+  await tick();
+  server.take('alder/generators').resolve({ generators: [msg] });
+  await tick();
+  server.take('alder/preview').resolve(ready([nameYou('Delete')]));
+  await tick();
+  flow['setField']('name', 'A');
+  flow['setField']('name', 'AB');
+  assert.equal(server.pending.length, 0, 'nothing is sent before the pause');
+  await new Promise(r => setTimeout(r, 30));
+  const previews = server.pending.filter(p => p.method === 'alder/preview');
+  assert.equal(previews.length, 1);
+  assert.deepEqual(previews[0].params.sets, { page: 'Posts.Index', name: 'AB' });
+  flow.close();
+});
