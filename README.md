@@ -29,6 +29,20 @@ Platforms: macOS and Linux. Windows is untested, and binary discovery does not l
 - `alder.trace.server`: LSP traffic into the Alder output channel.
 - `alder.test.args`: extra `alder test` arguments.
 
+## Commands
+
+All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a` on macOS).
+
+- **Routes** (`u`): the app's pages and messages; pick one to open its declaration.
+- **Run the App** (`r`): `alder run` in a terminal at the app root, reused while it is open.
+- **Explain Diagnostic** (`e`): the explanation of the diagnostic under the cursor (or a code you
+  type) in a markdown preview.
+- **Run Tests** (`t`), **Run Test at Cursor** (`shift+t`), **Mutation Testing** (`m`): also in the
+  Test Explorer, where "Mutation testing" is a second run profile. Unsaved `.alder` files of the
+  app are saved first (the tests read disk). A failing test shows its two sides as a diff, the
+  right side as expected; mutants that survive are warnings in Problems until the next mutation
+  run. `alder.test.args` is added to every run.
+
 ## Fill with AI
 
 The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's source to the
