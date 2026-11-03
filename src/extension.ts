@@ -5,6 +5,7 @@ import { registerNotYet, trackProject } from './commands';
 import { Deps } from './deps';
 import { explainDiagnostic } from './explain';
 import { report } from './health';
+import { AppTerminals } from './run';
 import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
 import { VirtualDocs } from './virtualDocs';
 
@@ -28,6 +29,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   const docs = new VirtualDocs();
   docs.register(context);
   const deps: Deps = { clients: cs, docs, output };
+  const terminals = new AppTerminals(deps);
+  terminals.register(context);
 
   const health = async () => {
     const env = serverEnv(process.env, vscode.workspace.getConfiguration('alder').get('serverEnv'));
@@ -45,6 +48,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
     vscode.commands.registerCommand('alder.explainDiagnostic', (code?: unknown) => explainDiagnostic(deps, typeof code === 'string' ? code : undefined)),
     vscode.commands.registerCommand('alder.routes', (ui?: RouteUi) => pickRoutes(deps, ui && typeof ui.pick === 'function' ? ui : undefined)),
+    vscode.commands.registerCommand('alder.run', () => terminals.run()),
     vscode.commands.registerCommand('alder.restartServer', () => cs.restart()),
     vscode.workspace.onDidOpenTextDocument(doc => void cs.ensure(doc)),
     vscode.workspace.onDidChangeConfiguration(e => {
