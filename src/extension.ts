@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
+import { State } from 'vscode-languageclient/node';
 import { Clients } from './client';
 import { SERVER_COMMANDS, serverEnv } from './clientConfig';
 import { registerNotYet, trackProject } from './commands';
 import { Deps } from './deps';
 import { explainDiagnostic } from './explain';
+import { applyGenerator } from './generate/apply';
+import type { ApplyUi, Origin } from './generate/flow';
+import type { Sets } from './generate/types';
 import { report } from './health';
 import { AppTerminals } from './run';
 import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
@@ -19,6 +23,10 @@ export interface Api {
   };
   tests: AlderTests;
   health(): Promise<string[]>;
+  generate: {
+    apply(origin: Origin, id: string, s: Sets, ui: ApplyUi): Promise<boolean>;
+    diagnostics: vscode.DiagnosticCollection;
+  };
 }
 
 let clients: Clients | undefined;
@@ -67,12 +75,24 @@ export function activate(context: vscode.ExtensionContext): Api {
   registerNotYet(context);
   trackProject(context);
   for (const doc of vscode.workspace.textDocuments) void cs.ensure(doc);
+  const genDiagnostics = vscode.languages.createDiagnosticCollection('alder generate');
+  context.subscriptions.push(genDiagnostics);
+  const generateApply = async (origin: Origin, id: string, s: Sets, ui: ApplyUi) => {
+    const client = await cs.forUri(origin.uri);
+    if (!client) {
+      ui.error('alder: no alder lsp running for this file');
+      return false;
+    }
+    const server = { request: <T>(m: string, p: unknown) => client.sendRequest<T>(m, p), running: () => client.state === State.Running };
+    return applyGenerator({ server, root: origin.root, ui, diagnostics: genDiagnostics }, origin, id, s);
+  };
   return {
     clients: cs,
     docs,
     routes: { fetch: root => fetchRoutes(deps, root), fetchCli: (root, e) => fetchCli(deps, root, e) },
     tests,
     health,
+    generate: { apply: generateApply, diagnostics: genDiagnostics },
   };
 }
 
