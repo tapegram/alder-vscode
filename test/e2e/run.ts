@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -17,6 +18,19 @@ function copyExample(repo: string, name: string, to: string): void {
   });
 }
 
+// DEMO's line numbers are pinned by tests.e2e.ts (0-based: "answer is positive" on 5, "answer is 42" on 7).
+export const DEMO = [
+  'module Demo',
+  '',
+  'answer : Int',
+  'answer = 40 + 1',
+  '',
+  'test "answer is positive" = answer > 0',
+  '',
+  'test "answer is 42" = answer == 42',
+  '',
+].join('\n');
+
 async function main(): Promise<void> {
   const bin = need('ALDER_BIN');
   const repo = resolve(need('ALDER_REPO'));
@@ -31,6 +45,10 @@ async function main(): Promise<void> {
   writeFileSync(app, holed);
   writeFileSync(join(ws, 'fill/app/Helpers.alder'),
     'module Helpers\n\ngoLogin : Task Nav\ngoLogin = Task.succeed (Redirect (Auth.Login {}))\n');
+  // demo: a fresh `alder new` app with one passing and one failing test (Demo), for the test
+  // controller, mutation testing, explain and run. The scaffold's own Home tests pass.
+  execFileSync(bin, ['new', 'demo'], { cwd: ws, stdio: 'ignore' });
+  writeFileSync(join(ws, 'demo/app/Demo.alder'), DEMO);
   mkdirSync(join(ws, '.vscode'));
   writeFileSync(join(ws, '.vscode/settings.json'), JSON.stringify({
     'alder.path': bin,
@@ -46,7 +64,7 @@ async function main(): Promise<void> {
       extensionDevelopmentPath: root,
       extensionTestsPath: join(__dirname, 'index.js'),
       launchArgs: [ws, '--disable-extensions', '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes'],
-      extensionTestsEnv: { ALDER_E2E_WS: ws },
+      extensionTestsEnv: { ALDER_E2E_WS: ws, ALDER_E2E_ONLY: process.env.ALDER_E2E_ONLY ?? '' },
     });
   } finally {
     rmSync(ws, { recursive: true, force: true });

@@ -2,10 +2,22 @@ import * as vscode from 'vscode';
 import { Clients } from './client';
 import { SERVER_COMMANDS, serverEnv } from './clientConfig';
 import { registerNotYet, trackProject } from './commands';
+import { Deps } from './deps';
+import { explainDiagnostic } from './explain';
 import { report } from './health';
+import { AppTerminals } from './run';
+import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
+import { AlderTests } from './tests';
+import { VirtualDocs } from './virtualDocs';
 
 export interface Api {
   clients: Clients;
+  docs: VirtualDocs;
+  routes: {
+    fetch(root: string): Promise<Fetched>;
+    fetchCli(root: string, lspError?: string): Promise<Fetched>;
+  };
+  tests: AlderTests;
   health(): Promise<string[]>;
 }
 
@@ -16,6 +28,13 @@ export function activate(context: vscode.ExtensionContext): Api {
   context.subscriptions.push(output);
   const cs = new Clients(output);
   clients = cs;
+  const docs = new VirtualDocs();
+  docs.register(context);
+  const deps: Deps = { clients: cs, docs, output };
+  const terminals = new AppTerminals(deps);
+  terminals.register(context);
+  const tests = new AlderTests(deps);
+  tests.register(context);
 
   const health = async () => {
     const env = serverEnv(process.env, vscode.workspace.getConfiguration('alder').get('serverEnv'));
@@ -31,6 +50,12 @@ export function activate(context: vscode.ExtensionContext): Api {
       for (const line of await health()) output.appendLine(line);
       output.show(true);
     }),
+    vscode.commands.registerCommand('alder.explainDiagnostic', (code?: unknown) => explainDiagnostic(deps, typeof code === 'string' ? code : undefined)),
+    vscode.commands.registerCommand('alder.routes', (ui?: RouteUi) => pickRoutes(deps, ui && typeof ui.pick === 'function' ? ui : undefined)),
+    vscode.commands.registerCommand('alder.run', () => terminals.run()),
+    vscode.commands.registerCommand('alder.test.run', () => tests.runActive('test')),
+    vscode.commands.registerCommand('alder.test.runAtCursor', () => tests.runAtCursor()),
+    vscode.commands.registerCommand('alder.test.mutate', () => tests.runActive('mutate')),
     vscode.commands.registerCommand('alder.restartServer', () => cs.restart()),
     vscode.workspace.onDidOpenTextDocument(doc => void cs.ensure(doc)),
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -42,7 +67,13 @@ export function activate(context: vscode.ExtensionContext): Api {
   registerNotYet(context);
   trackProject(context);
   for (const doc of vscode.workspace.textDocuments) void cs.ensure(doc);
-  return { clients: cs, health };
+  return {
+    clients: cs,
+    docs,
+    routes: { fetch: root => fetchRoutes(deps, root), fetchCli: (root, e) => fetchCli(deps, root, e) },
+    tests,
+    health,
+  };
 }
 
 export async function deactivate(): Promise<void> {
