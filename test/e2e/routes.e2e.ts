@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { RouteItem } from '../../src/routes';
+import { State } from 'vscode-languageclient/node';
 import { api, open, until, ws } from './helpers';
 
 const blog = () => join(ws(), 'blog');
@@ -18,6 +19,15 @@ async function serverRoutes(root: string) {
 describe('Alder: Routes', () => {
   it('lists the blog\'s routes from the server, GET / at Posts.Index.page', async () => {
     await open('blog/app/Posts/Index.alder');
+    // the helper falls back to the CLI silently: ask the blog's server by method name
+    const client = await (await api()).clients.forUri(vscode.Uri.file(blog()));
+    assert.ok(client, 'no client for the blog');
+    assert.equal(client.state, State.Running);
+    const raw = await until(async () => {
+      const r = await client.sendRequest<unknown[] | null>('alder/routes', {});
+      return r && r.length > 0 ? r : undefined;
+    }, 'the server to list routes');
+    assert.ok(raw.length > 0);
     const got = await serverRoutes(blog());
     const home = got.routes.find(r => r.path === '/' && r.kind === 'page');
     assert.ok(home, JSON.stringify(got.routes.slice(0, 3)));
