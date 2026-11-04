@@ -1,0 +1,32 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run compile
+      - name: notes
+        run: node out/scripts/release.js notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      - name: package
+        run: |
+          npm run package
+          node out/scripts/release.js check-vsix "alder-${GITHUB_REF_NAME#v}.vsix"
+      - name: release
+        run: gh release create "$GITHUB_REF_NAME" "alder-${GITHUB_REF_NAME#v}.vsix" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
