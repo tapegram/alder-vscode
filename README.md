@@ -15,7 +15,8 @@ Until the Marketplace listing: download `alder-<version>.vsix` from a release (o
 
 An `alder` binary with the `lsp` command. The extension looks at the `alder.path` setting, then
 `PATH`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and `~/bin` (VS Code started from the Dock sees a
-shorter `PATH` than your shell). `Alder: Show Health` says what it found.
+shorter `PATH` than your shell). It takes the first `alder` there that has the `lsp` command: an older one earlier on `PATH`, such as a
+packaged release, is skipped and listed by `Alder: Show Health`, which says what it found.
 
 Each folder holding an `app/` directory is an app root and gets its own `alder lsp`.
 
