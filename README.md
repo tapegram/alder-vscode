@@ -8,19 +8,28 @@ tapegram/alder: `go build -o ~/bin/alder ./cmd/alder`.
 
 ## Install
 
-Until the Marketplace listing: download `alder-<version>.vsix` from a release (or a CI run's
-`vsix` artifact) and run `code --install-extension alder-<version>.vsix`.
+Download `alder-<version>.vsix` from the
+[latest release](https://github.com/tapegram/alder-vscode/releases/latest) (or
+`gh release download -R tapegram/alder-vscode -p '*.vsix'`) and run
+`code --install-extension alder-<version>.vsix`. The extension is not on the Marketplace or
+Open VSX yet.
 
 ## Requirements
 
 An `alder` binary with the `lsp` command. The extension looks at the `alder.path` setting, then
 `PATH`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and `~/bin` (VS Code started from the Dock sees a
-shorter `PATH` than your shell). `Alder: Show Health` says what it found.
+shorter `PATH` than your shell); an `alder.path` that is a path is used alone and turns off the
+search. It takes the first `alder` there that has the `lsp` command: an
+older one earlier on `PATH`, such as a packaged release, is skipped and listed by
+`Alder: Show Health`, which says what it found.
+
+Any alder new enough to have `lsp` works: the extension checks what the binary offers when it
+starts rather than asking for a version. An alder without highlighting or scratch support
+says so once, and the rest keeps working; `Alder: Show Health` lists what is missing.
 
 Each folder holding an `app/` directory is an app root and gets its own `alder lsp`.
 
-Platforms: macOS and Linux. Windows is untested, and binary discovery does not look for
-`alder.exe`.
+Platforms: macOS and Linux.
 
 ## Settings
 
@@ -56,12 +65,23 @@ All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a`
 
 ## Fill with AI
 
-The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's source to the
-configured model: set `ANTHROPIC_API_KEY` (and optionally `ALDER_FILL_MODEL`), or
-`ALDER_FILL_COMMAND` to a command that reads the prompt on stdin, in the environment VS Code
-starts from or in `alder.serverEnv`.
+The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's source, the names
+and types of the values in scope (including those of the app modules it imports) and the
+standard library's signatures to the configured model, together with the whole file named by
+`ALDER_FILL_REFERENCE` when that is set. Set `ANTHROPIC_API_KEY` (and optionally
+`ALDER_FILL_MODEL`), or `ALDER_FILL_COMMAND` to a command that reads the prompt on stdin
+(it receives the same text), in the environment VS Code starts from or in `alder.serverEnv`.
 Put `ANTHROPIC_API_KEY` in your user settings or your shell's environment, never in a
 committed `.vscode/settings.json`.
+
+## Known limitations
+
+- Windows is untested, and binary discovery does not look for `alder.exe`.
+- No highlighting inside `<script>` and `<style>`.
+- The Test Explorer finds tests by a pattern (`test "name" =` at the start of a line), so a test
+  written another way shows up only after it has run.
+- No packaged alder release has `lsp` yet, so build alder from source as in Requirements
+  ([tapegram/alder#174](https://github.com/tapegram/alder/issues/174)).
 
 ## Development
 
@@ -69,3 +89,10 @@ committed `.vscode/settings.json`.
 `.alder-ref` and a binary built from it: `ALDER_BIN=<bin> ALDER_REPO=<checkout> npm run test:e2e`.
 Set `VSCODE_VERSION` (default `stable`) to run them against another VS Code; CI also runs 1.91.0,
 the `engines` floor.
+
+### Releasing
+
+Set the version (`npm version <x.y.z> --no-git-tag-version`), give CHANGELOG.md a `## <x.y.z>`
+section, merge, then tag the merge commit `v<x.y.z>` and push the tag. The release workflow
+runs CI and attaches the `.vsix` with that section as the notes; a tag that does not match
+`package.json`, or a missing section, fails before anything is published.

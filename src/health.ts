@@ -18,7 +18,7 @@ export function candidates(setting: string, env: NodeJS.ProcessEnv, home: string
   const gopath = (env.GOPATH ?? '').split(delimiter)[0];
   if (gopath) dirs.push(join(gopath, 'bin'));
   dirs.push(join(home, 'go', 'bin'), join(home, 'bin'));
-  return dirs.map(d => join(d, setting));
+  return [...new Set(dirs.map(d => join(d, setting)))];
 }
 
 async function executable(p: string): Promise<boolean> {
@@ -55,13 +55,9 @@ function run(path: string, args: string[]): Promise<{ code: number; stdout: stri
   });
 }
 
-export interface Gate { path?: string; version?: string; ok: boolean; problem?: string }
+export interface Gate { path?: string; version?: string; ok: boolean; problem?: string; skipped?: { path: string; version?: string }[] }
 
-export async function checkBinary(setting: string, env: NodeJS.ProcessEnv, home: string): Promise<Gate> {
-  const path = await resolveBinary(setting, env, home);
-  if (!path) {
-    return { ok: false, problem: `alder: no \`${setting}\` binary found (alder.path, PATH, $GOBIN, $GOPATH/bin, ~/go/bin, ~/bin); ${BUILD_HINT}` };
-  }
+async function gate(path: string): Promise<Gate> {
   const v = await run(path, ['version']);
   const version = v.code === 0 ? v.stdout.trim() || undefined : undefined;
   const help = await run(path, ['help', '--json']);
@@ -71,12 +67,31 @@ export async function checkBinary(setting: string, env: NodeJS.ProcessEnv, home:
   return { path, version, ok: true };
 }
 
+// checkBinary: a path setting checks only that binary; a bare name takes the first candidate
+// that passes the gate, listing the executables it passed over.
+export async function checkBinary(setting: string, env: NodeJS.ProcessEnv, home: string): Promise<Gate> {
+  const found: string[] = [];
+  for (const p of candidates(setting, env, home)) if (await executable(p)) found.push(p);
+  if (found.length === 0) {
+    return { ok: false, problem: `alder: no \`${setting}\` binary found (alder.path, PATH, $GOBIN, $GOPATH/bin, ~/go/bin, ~/bin); ${BUILD_HINT}` };
+  }
+  const failed: Gate[] = [];
+  for (const p of found) {
+    const g = await gate(p);
+    if (g.ok) return failed.length ? { ...g, skipped: failed.map(f => ({ path: f.path!, version: f.version })) } : g;
+    failed.push(g);
+  }
+  const [first, ...rest] = failed;
+  return rest.length ? { ...first, skipped: rest.map(f => ({ path: f.path!, version: f.version })) } : first;
+}
+
 export interface RootStatus { root: string; running: boolean; tokens: boolean; scratch: boolean }
 
 // report is the `Alder: Show Health` text. The fill variables are named, never their values.
 export function report(gate: Gate, roots: RootStatus[], env: NodeJS.ProcessEnv): string[] {
   const out: string[] = [];
   out.push(gate.path ? `binary: ${gate.path}${gate.version ? ` (${gate.version})` : ''}` : 'binary: not found');
+  for (const k of gate.skipped ?? []) out.push(`skipped: ${k.path}${k.version ? ` (${k.version})` : ''}: no \`lsp\``);
   out.push(gate.ok ? 'ok: `alder help --json` lists `lsp`' : `error: ${gate.problem}`);
   for (const r of roots) {
     out.push(r.running ? `ok: alder lsp running for ${r.root}` : `warn: alder lsp for ${r.root} is stopped (Alder: Restart Server)`);

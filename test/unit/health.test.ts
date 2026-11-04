@@ -102,3 +102,76 @@ test('the report with no server running says how to start one', () => {
 test('candidates expands ~/ in alder.path to the home directory', () => {
   assert.deepEqual(candidates('~/bin/alder', { PATH: '/usr/bin' }, '/home/u'), ['/home/u/bin/alder']);
 });
+
+const OLD = `case "$1" in help) echo 'usage: alder <command>';; version) echo 'alder v0.1.0';; esac`;
+const NEW = `case "$1" in help) echo '${TREE}';; version) echo 'alder 1.2.3';; esac`;
+
+test('an old alder first on PATH is skipped for one with lsp in ~/go/bin', async () => {
+  const home = dir();
+  const pdir = dir();
+  const old = fake(pdir, OLD);
+  const cur = fake(join(home, 'go/bin'), NEW);
+  const g = await checkBinary('alder', { PATH: pdir }, home);
+  assert.equal(g.ok, true, g.problem);
+  assert.equal(g.path, cur);
+  assert.deepEqual(g.skipped, [{ path: old, version: 'alder v0.1.0' }]);
+});
+
+test('with alder.path set to a path, only that binary is checked', async () => {
+  const home = dir();
+  const old = fake(dir(), OLD);
+  fake(join(home, 'go/bin'), NEW);
+  const g = await checkBinary(old, { PATH: '' }, home);
+  assert.equal(g.ok, false);
+  assert.equal(g.path, old);
+  assert.ok(!g.skipped || g.skipped.length === 0);
+});
+
+test('when none has lsp, the first is reported and the rest are skipped', async () => {
+  const home = dir();
+  const pdir = dir();
+  const first = fake(pdir, OLD);
+  const second = fake(join(home, 'bin'), OLD);
+  const g = await checkBinary('alder', { PATH: pdir }, home);
+  assert.equal(g.ok, false);
+  assert.equal(g.path, first);
+  assert.match(g.problem!, /help --json/);
+  assert.ok(g.problem!.includes(BUILD_HINT));
+  assert.deepEqual(g.skipped, [{ path: second, version: 'alder v0.1.0' }]);
+});
+
+test('report lists skipped binaries', () => {
+  const lines = report(
+    { path: '/new/alder', version: 'alder 1.2.3', ok: true, skipped: [{ path: '/old/alder', version: 'alder v0.1.0' }, { path: '/older/alder' }] },
+    [], {});
+  assert.equal(lines[0], 'binary: /new/alder (alder 1.2.3)');
+  assert.equal(lines[1], 'skipped: /old/alder (alder v0.1.0): no `lsp`');
+  assert.equal(lines[2], 'skipped: /older/alder: no `lsp`');
+  assert.match(lines[3], /^ok:/);
+});
+
+test('candidates returns a repeated directory once, keeping the first occurrence', () => {
+  const env = { PATH: ['/a', '/b', '/a'].join(delimiter), GOBIN: '/b' };
+  assert.deepEqual(candidates('alder', env, '/home/u'),
+    ['/a/alder', '/b/alder', '/home/u/go/bin/alder', '/home/u/bin/alder']);
+});
+
+test('an old alder reachable twice is listed once in skipped', async () => {
+  const home = dir();
+  const old = join(dir(), 'old');
+  fake(old, OLD);
+  const good = join(home, 'go/bin');
+  fake(good, NEW);
+  const g = await checkBinary('alder', { PATH: [old, old].join(delimiter) }, home);
+  assert.equal(g.ok, true, g.problem);
+  assert.deepEqual(g.skipped?.map(s => s.path), [join(old, 'alder')]);
+});
+
+test('an old alder reachable twice and the only one is not also listed as skipped', async () => {
+  const old = join(dir(), 'old');
+  fake(old, OLD);
+  const g = await checkBinary('alder', { PATH: [old, old].join(delimiter) }, dir());
+  assert.equal(g.ok, false);
+  assert.equal(g.path, join(old, 'alder'));
+  assert.equal(g.skipped, undefined);
+});
