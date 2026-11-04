@@ -18,7 +18,8 @@ Open VSX yet.
 
 An `alder` binary with the `lsp` command. The extension looks at the `alder.path` setting, then
 `PATH`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and `~/bin` (VS Code started from the Dock sees a
-shorter `PATH` than your shell). It takes the first `alder` there that has the `lsp` command: an
+shorter `PATH` than your shell); an `alder.path` that is a path is used alone and turns off the
+search. It takes the first `alder` there that has the `lsp` command: an
 older one earlier on `PATH`, such as a packaged release, is skipped and listed by
 `Alder: Show Health`, which says what it found.
 
@@ -64,10 +65,12 @@ All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a`
 
 ## Fill with AI
 
-The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's source to the
-configured model: set `ANTHROPIC_API_KEY` (and optionally `ALDER_FILL_MODEL`), or
-`ALDER_FILL_COMMAND` to a command that reads the prompt on stdin, in the environment VS Code
-starts from or in `alder.serverEnv`.
+The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's source, the names
+and types of the values in scope (including those of the app modules it imports) and the
+standard library's signatures to the configured model, together with the whole file named by
+`ALDER_FILL_REFERENCE` when that is set. Set `ANTHROPIC_API_KEY` (and optionally
+`ALDER_FILL_MODEL`), or `ALDER_FILL_COMMAND` to a command that reads the prompt on stdin
+(it receives the same text), in the environment VS Code starts from or in `alder.serverEnv`.
 Put `ANTHROPIC_API_KEY` in your user settings or your shell's environment, never in a
 committed `.vscode/settings.json`.
 

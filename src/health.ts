@@ -18,7 +18,7 @@ export function candidates(setting: string, env: NodeJS.ProcessEnv, home: string
   const gopath = (env.GOPATH ?? '').split(delimiter)[0];
   if (gopath) dirs.push(join(gopath, 'bin'));
   dirs.push(join(home, 'go', 'bin'), join(home, 'bin'));
-  return dirs.map(d => join(d, setting));
+  return [...new Set(dirs.map(d => join(d, setting)))];
 }
 
 async function executable(p: string): Promise<boolean> {
