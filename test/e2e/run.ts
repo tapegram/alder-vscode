@@ -31,6 +31,16 @@ export const DEMO = [
   '',
 ].join('\n');
 
+// PAD's lines are pinned by scratch.e2e.ts.
+export const PAD = [
+  'module Pad',
+  '',
+  'answer : Int',
+  'answer =',
+  '    20 + 22',
+  '',
+].join('\n');
+
 async function main(): Promise<void> {
   const bin = need('ALDER_BIN');
   const repo = resolve(need('ALDER_REPO'));
@@ -53,6 +63,15 @@ async function main(): Promise<void> {
   // controller, mutation testing, explain and run. The scaffold's own Home tests pass.
   execFileSync(bin, ['new', 'demo'], { cwd: ws, stdio: 'ignore' });
   writeFileSync(join(ws, 'demo/app/Demo.alder'), DEMO);
+  // pad: a fresh app for scratch files (its scratch runs build and run a program: kept apart
+  // from the apps other tests save in, since a save reruns every open scratch document).
+  execFileSync(bin, ['new', 'pad'], { cwd: ws, stdio: 'ignore' });
+  // the scaffold writes a scratch.alder: gone, so the e2e sees Open Scratch create it
+  rmSync(join(ws, 'pad/scratch.alder'), { force: true });
+  // and no migrations: a scratch build globs <root>/migrations/*.sql unescaped, so under the [x]
+  // root it finds none and fails (alder internal/buildkit CopyMigrations); pad needs no database
+  rmSync(join(ws, 'pad/migrations'), { recursive: true, force: true });
+  writeFileSync(join(ws, 'pad/app/Pad.alder'), PAD);
   mkdirSync(join(ws, '.vscode'));
   writeFileSync(join(ws, '.vscode/settings.json'), JSON.stringify({
     'alder.path': bin,

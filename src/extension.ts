@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Clients } from './client';
 import { SERVER_COMMANDS, serverEnv } from './clientConfig';
-import { registerNotYet, trackProject } from './commands';
+import { trackProject } from './commands';
 import { Deps } from './deps';
 import { explainDiagnostic } from './explain';
 import { Generate } from './generate/command';
@@ -10,6 +10,7 @@ import type { Sets } from './generate/types';
 import { report } from './health';
 import { AppTerminals } from './run';
 import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
+import { ScratchUi } from './scratchUi';
 import { AlderTests } from './tests';
 import { VirtualDocs } from './virtualDocs';
 
@@ -27,6 +28,7 @@ export interface Api {
     apply(origin: Origin, id: string, s: Sets, ui: ApplyUi): Promise<boolean>;
     diagnostics: vscode.DiagnosticCollection;
   };
+  scratch: ScratchUi;
 }
 
 let clients: Clients | undefined;
@@ -45,6 +47,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   tests.register(context);
   const generate = new Generate(deps);
   generate.register(context);
+  const scratch = new ScratchUi(deps);
+  scratch.register(context);
 
   const health = async () => {
     const env = serverEnv(process.env, vscode.workspace.getConfiguration('alder').get('serverEnv'));
@@ -74,7 +78,6 @@ export function activate(context: vscode.ExtensionContext): Api {
       }
     }),
   );
-  registerNotYet(context);
   trackProject(context);
   for (const doc of vscode.workspace.textDocuments) void cs.ensure(doc);
   return {
@@ -84,6 +87,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     tests,
     health,
     generate: { run: (p, ui) => generate.run(p, ui), apply: (o, id, s, ui) => generate.apply(o, id, s, ui), diagnostics: generate.diagnostics },
+    scratch,
   };
 }
 
