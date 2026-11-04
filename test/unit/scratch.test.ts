@@ -124,3 +124,18 @@ test('fileLine: error, else note, else a warning not yet shown in another run', 
   assert.equal(fileLine({ uri: 'u', version: 2, warning: 'w' }, 1), undefined);
   assert.equal(fileLine({ uri: 'u', version: 1 }, undefined), undefined);
 });
+
+test('a values notification without lines keeps the snapshot types took for the same version', () => {
+  const s = new ScratchStore();
+  s.record({ uri: 'file:///a', version: 3, phase: 'types' }, ['> 1']);
+  s.record({ uri: 'file:///a', version: 3, phase: 'values' });
+  assert.deepEqual(s.entry('file:///a')?.lines, ['> 1']);
+  assert.equal(s.last('file:///a')?.phase, 'values');
+});
+
+test('lines are not kept across a different version', () => {
+  const s = new ScratchStore();
+  s.record({ uri: 'file:///a', version: 3, phase: 'types' }, ['> 1']);
+  s.record({ uri: 'file:///a', version: 4, phase: 'values' });
+  assert.equal(s.entry('file:///a')?.lines, undefined);
+});

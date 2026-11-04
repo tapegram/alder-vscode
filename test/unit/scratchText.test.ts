@@ -103,3 +103,8 @@ test('inHeaderWarning only when a module is sending and the header differs', () 
   assert.equal(inHeaderWarning('Todo', 'in Todo\n> 1\n'), undefined);
   assert.equal(inHeaderWarning(undefined, '> 1\n'), undefined);
 });
+
+test('the in header allows _ in a module name, as the server does', () => {
+  assert.equal(headerModule('in My_Mod\n> 1\n'), 'My_Mod');
+  assert.equal(inHeaderWarning('My_Mod', 'in My_Mod\n'), undefined);
+});

@@ -94,7 +94,7 @@ export function moduleName(text: string): string | undefined {
 export function headerModule(text: string): string | undefined {
   for (const l of text.split(/\r?\n/)) {
     if (blank(l) || /^\s*--/.test(l)) continue;
-    return /^in\s+([A-Za-z0-9.]+)\s*$/.exec(l)?.[1];
+    return /^in\s+([A-Za-z0-9_.]+)\s*$/.exec(l)?.[1];
   }
   return undefined;
 }

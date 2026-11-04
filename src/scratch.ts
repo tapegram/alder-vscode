@@ -29,7 +29,8 @@ export interface ScratchParams {
 }
 
 // ScratchEntry is a notification and the document's lines at its version, when the editor still
-// had that version as it arrived (else none: no watch can be found until the next run).
+// had that version as it arrived (else none: no watch can be found until the next run). A later
+// notification for the same version without lines keeps the earlier snapshot.
 export interface ScratchEntry {
   params: ScratchParams;
   lines?: string[];
@@ -41,6 +42,8 @@ export class ScratchStore {
 
   record(p: ScratchParams, lines?: string[]): void {
     if (!p || typeof p.uri !== 'string') return;
+    const prev = this.byUri.get(p.uri);
+    if (lines === undefined && prev?.lines && prev.params.version === p.version) lines = prev.lines;
     this.byUri.set(p.uri, { params: p, lines });
     this.fire(p.uri);
   }
