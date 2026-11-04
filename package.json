@@ -3,7 +3,7 @@
   "displayName": "Alder",
   "description": "Alder language support: the alder lsp server in VS Code",
   "publisher": "tapegram",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -200,7 +200,10 @@
     ],
     "menus": {
       "commandPalette": [
-        { "command": "alder.generate.apply", "when": "false" }
+        {
+          "command": "alder.generate.apply",
+          "when": "false"
+        }
       ]
     },
     "keybindings": [
