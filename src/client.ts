@@ -7,7 +7,7 @@ import {
 import { findRoot, realRoot } from './root';
 import { checkBinary, Gate, MISSING_SCRATCH, MISSING_TOKENS, RootStatus } from './health';
 import { commandUri, selectorPatterns, serverEnv } from './clientConfig';
-import { ScratchStore, ScratchParams } from './scratch';
+import { docLines, ScratchStore, ScratchParams } from './scratch';
 
 // stopping marks a stop the extension asked for, which errorHandler.closed must not treat as a crash.
 // starting settles to whether the client started.
@@ -136,7 +136,7 @@ export class Clients {
     // The extension registers the server's commands once for all clients (see SERVER_COMMANDS).
     const exec = client.getFeature(ExecuteCommandRequest.method) as unknown as { initialize: (c: unknown) => void };
     exec.initialize = () => {};
-    client.onNotification('alder/scratch', (p: ScratchParams) => this.scratch.record(p));
+    client.onNotification('alder/scratch', (p: ScratchParams) => this.scratch.record(p, snapshot(p)));
     const e: Entry = { root, real, client, starting: Promise.resolve(false), stopping: false };
     e.starting = client.start().then(() => {
       started = true;
@@ -223,4 +223,12 @@ export class Clients {
     this.scratch.clear();
     for (const doc of vscode.workspace.textDocuments) await this.ensure(doc);
   }
+}
+
+// snapshot is the lines of p's document when the editor still has the version the server ran,
+// so watchAt can compare them with the document later, as the server's inlay hints do.
+function snapshot(p: ScratchParams | undefined): string[] | undefined {
+  if (!p || typeof p.uri !== 'string') return undefined;
+  const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === p.uri);
+  return doc && doc.version === p.version ? docLines(doc.getText()) : undefined;
 }
