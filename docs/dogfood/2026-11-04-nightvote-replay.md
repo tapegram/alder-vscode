@@ -5,13 +5,13 @@ This is the release plan's dogfooding pass for alder-vscode 0.1.0 (alder#144 mil
 ## Setup
 
 - VS Code 1.145.0 (`@vscode/test-electron`, stable).
-- nightvote-replay at `56f707c`. The pass copies the app (without `.git`, `build/` and databases) into a temp workspace and fails if the real app's `git status` changes. It did not change in any run.
+- nightvote-replay at `56f707c`. The pass copies the app into a temp workspace, without `.git`, `build/`, databases or symlinks. It fails if the real app's `git status --ignored` changes. It did not change in any run.
 - Command:
   `ALDER_BIN=<bin> ALDER_DOGFOOD_ROOT=~/projects/nightvote-replay npm run test:e2e`
 - Three runs:
   1. **The user's binary** (`command -v alder`): `/opt/homebrew/bin/alder`, `alder v0.1.0 (go 1.27.2)`, the Homebrew tap's only release.
   2. **alder main** `5a35e5ad` (`alder devel+5a35e5ad3a26`), the build `.alder-ref` pins, on the unchanged app.
-  3. **alder main** `5a35e5ad` on a scratch copy of the app, patched to compile on main. The patch renames its `Json` module to `AppJson` and wraps two `File.json` arguments in `Json.string`; see finding 3. The real repo was not touched.
+  3. **alder main** `5a35e5ad` on a scratch copy of the app, patched to compile on main. The patch renames its user module named like the new stdlib module (`Json`) and adapts its `File.json` calls to the new `Json.Value` argument; see finding 3. The real repo was not touched.
 
 ## Results
 
@@ -27,11 +27,11 @@ Run 3 is the one that measures the extension:
 | Slowest file to first tokens | 42 ms (median 14 ms) | ok |
 | Diagnostics vs `alder check` | check exits 0; the editor shows 0 errors | ok |
 | Routes: server vs `alder routes --json` | 21 vs 21 | ok |
-| Tests: discovered vs results | 375 vs 375 (364 passed, 11 failed, the same as `alder test`) | ok |
+| Tests: discovered vs results | 375/375 reported, 11 failed | see below |
 | Generators at a page's first line | 21 listed, 6 apply here | ok |
 | Scratch: Open Scratch to `⇒ 2 : Int` (first build of the program) | 2.3 s | ok |
 
-All 11 failed tests check the two endpoints whose `File.json` argument the patch changed. They fail because of the patch, not the extension, and the CLI run gives the same 364/11.
+All 11 failed tests check the endpoints whose `File.json` calls the patch changed. They fail because of the patch, not the extension, and the CLI run gives the same 364/11.
 
 ## Findings
 

@@ -56,7 +56,7 @@ describe('dogfood', function () {
     // a binary the extension refuses (no `lsp`) would only time out file by file: report it at once
     const gate = await a.clients.checkGate();
     if (!gate.ok) {
-      r.health = await a.health();
+      await soft('health', async () => { r.health = await a.health(); });
       r.failures.push(`the extension refuses ${bin}: ${gate.problem}`);
       write();
       assert.deepEqual(r.failures, [], `see ${out}`);
@@ -81,19 +81,21 @@ describe('dogfood', function () {
         r.files.push({ file: relative(root, f), tokensMs: Date.now() - t0, tokens: decode(toks.data, legend).length, folds: folds?.length ?? 0 });
       });
     }
-    r.health = await a.health();
+    await soft('health', async () => { r.health = await a.health(); });
 
     // diagnostics after the server has had time to build the whole app
-    await new Promise(res => setTimeout(res, 10_000));
-    for (const [uri, ds] of vscode.languages.getDiagnostics()) {
-      for (const d of ds) {
-        if (d.source === 'alder' && d.severity === vscode.DiagnosticSeverity.Error) {
-          r.errors.push(`${relative(root, uri.fsPath)}:${d.range.start.line + 1}: ${d.message.split('\n')[0]}`);
+    await soft('diagnostics', async () => {
+      await new Promise(res => setTimeout(res, 10_000));
+      for (const [uri, ds] of vscode.languages.getDiagnostics()) {
+        for (const d of ds) {
+          if (d.source === 'alder' && d.severity === vscode.DiagnosticSeverity.Error) {
+            r.errors.push(`${relative(root, uri.fsPath)}:${d.range.start.line + 1}: ${d.message.split('\n')[0]}`);
+          }
         }
       }
-    }
-    if (r.check.exit === 0 && r.errors.length) r.failures.push(`alder check passes but the editor shows ${r.errors.length} errors`);
-    if (r.check.exit !== 0 && !r.errors.length) r.failures.push('alder check fails but the editor shows no errors');
+      if (r.check.exit === 0 && r.errors.length) throw new Error(`alder check passes but the editor shows ${r.errors.length} errors`);
+      if (r.check.exit !== 0 && !r.errors.length) throw new Error('alder check fails but the editor shows no errors');
+    });
 
     await soft('routes', async () => {
       const lsp = await until(async () => { const g = await a.routes.fetch(root); return 'routes' in g && g.routes.length ? g : undefined; }, 'routes', 120_000);

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
+import { cpSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { runTests } from '@vscode/test-electron';
@@ -98,19 +98,21 @@ async function contract(): Promise<void> {
 }
 
 // dogfood runs dogfood.e2e.ts alone on a copy of a real app (ALDER_DOGFOOD_ROOT), and fails if
-// the real app's git status changed: the pass must never write to it.
+// the real app's git status changed: the pass must never write to it. --ignored catches a new
+// build/ or database too (an ignored directory is one `!! dir/` line, so churn inside one is not).
 async function dogfood(src: string): Promise<void> {
   const bin = need('ALDER_BIN');
-  const status = () => execFileSync('git', ['status', '--porcelain'], { cwd: src, encoding: 'utf8' });
+  const status = () => execFileSync('git', ['status', '--porcelain', '--ignored'], { cwd: src, encoding: 'utf8' });
   const before = status();
   // no [x] in this path: a scratch build of a real app needs its migrations (alder#172)
   const ws = realpathSync(mkdtempSync(join(tmpdir(), 'alder-vscode-dogfood-')));
   const app = join(ws, basename(src));
+  // symlinks are not copied: one pointing back into the real app could be written through
   cpSync(src, app, {
     recursive: true,
     filter: p => {
       const rel = p.slice(src.length);
-      return !/[/\\](\.git|build|node_modules|\.superpowers)([/\\]|$)/.test(rel) && !/\.db(-wal|-shm)?$/.test(rel);
+      return !lstatSync(p).isSymbolicLink() && !/[/\\](\.git|build|node_modules|\.superpowers)([/\\]|$)/.test(rel) && !/\.db(-wal|-shm)?$/.test(rel);
     },
   });
   // Open Scratch must create it, as for a new user
@@ -122,6 +124,7 @@ async function dogfood(src: string): Promise<void> {
     'chat.disableAIFeatures': true,
   }, null, 2));
   const root = resolve(__dirname, '../../..');
+  let failed: unknown;
   try {
     await runTests({
       version: process.env.VSCODE_VERSION ?? 'stable',
@@ -136,15 +139,21 @@ async function dogfood(src: string): Promise<void> {
         ALDER_DOGFOOD_OUT: resolve(process.env.ALDER_DOGFOOD_OUT ?? join(root, 'out/dogfood.json')),
       },
     });
-  } finally {
-    rmSync(ws, { recursive: true, force: true });
-    if (status() !== before) throw new Error(`the dogfood pass changed ${src}: git status differs`);
+  } catch (err) {
+    failed = err;
   }
+  rmSync(ws, { recursive: true, force: true });
+  // the guard's failure goes with the run's own error, never in place of it
+  const guard = status() !== before ? new Error(`the dogfood pass changed ${src}: git status differs`) : undefined;
+  if (failed && guard) throw new AggregateError([failed, guard], `${guard.message}; and the run failed: ${(failed as Error).message}`);
+  if (failed) throw failed;
+  if (guard) throw guard;
 }
 
 async function main(): Promise<void> {
   const src = process.env.ALDER_DOGFOOD_ROOT;
-  await (src ? dogfood(resolve(src)) : contract());
+  // realpath: the symlink filter must not skip a root that is itself a symlink
+  await (src ? dogfood(realpathSync(resolve(src))) : contract());
 }
 
 main().catch(err => {
