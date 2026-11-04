@@ -47,6 +47,12 @@ All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a`
   app are saved first (the tests read disk). A failing test shows its two sides as a diff, the
   right side as expected; mutants that survive are warnings in Problems until the next mutation
   run. `alder.test.args` is added to every run.
+- **Open Scratch** (`x`): the app's `scratch.alder`, created when missing. Each `> expr` line is a
+  watch: saving runs the file, and each watch's value shows at the end of its line. **Send to
+  Scratch** (`s`) appends the selected lines (or the cursor's line) and saves: an expression
+  becomes a watch, a definition goes in as written. **Open Scratch Value** (`o`) opens the full
+  value of the watch under the cursor beside it; hovering a watch whose value does not fit on its
+  line shows it too. An error or note about the whole file shows at the end of its first line.
 
 ## Fill with AI
 
