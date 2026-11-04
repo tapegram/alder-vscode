@@ -4,6 +4,9 @@ import { SERVER_COMMANDS, serverEnv } from './clientConfig';
 import { registerNotYet, trackProject } from './commands';
 import { Deps } from './deps';
 import { explainDiagnostic } from './explain';
+import { Generate } from './generate/command';
+import type { ApplyUi, FlowUi, Origin } from './generate/flow';
+import type { Sets } from './generate/types';
 import { report } from './health';
 import { AppTerminals } from './run';
 import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
@@ -19,6 +22,11 @@ export interface Api {
   };
   tests: AlderTests;
   health(): Promise<string[]>;
+  generate: {
+    run(preset?: unknown, ui?: FlowUi): Promise<void>;
+    apply(origin: Origin, id: string, s: Sets, ui: ApplyUi): Promise<boolean>;
+    diagnostics: vscode.DiagnosticCollection;
+  };
 }
 
 let clients: Clients | undefined;
@@ -35,6 +43,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   terminals.register(context);
   const tests = new AlderTests(deps);
   tests.register(context);
+  const generate = new Generate(deps);
+  generate.register(context);
 
   const health = async () => {
     const env = serverEnv(process.env, vscode.workspace.getConfiguration('alder').get('serverEnv'));
@@ -73,6 +83,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     routes: { fetch: root => fetchRoutes(deps, root), fetchCli: (root, e) => fetchCli(deps, root, e) },
     tests,
     health,
+    generate: { run: (p, ui) => generate.run(p, ui), apply: (o, id, s, ui) => generate.apply(o, id, s, ui), diagnostics: generate.diagnostics },
   };
 }
 

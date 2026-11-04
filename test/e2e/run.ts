@@ -45,6 +45,10 @@ async function main(): Promise<void> {
   writeFileSync(app, holed);
   writeFileSync(join(ws, 'fill/app/Helpers.alder'),
     'module Helpers\n\ngoLogin : Task Nav\ngoLogin = Task.succeed (Redirect (Auth.Login {}))\n');
+  // gen: a blog copy the generator tests change (created, edited and removed files), with an
+  // unlinked page (Tags.Index) for `remove page`.
+  copyExample(repo, 'blog', join(ws, 'gen'));
+  execFileSync(bin, ['new', 'page', 'Tags.Index', '/tags', '--dir', join(ws, 'gen')], { stdio: 'ignore' });
   // demo: a fresh `alder new` app with one passing and one failing test (Demo), for the test
   // controller, mutation testing, explain and run. The scaffold's own Home tests pass.
   execFileSync(bin, ['new', 'demo'], { cwd: ws, stdio: 'ignore' });
@@ -55,6 +59,8 @@ async function main(): Promise<void> {
     'alder.serverEnv': { ALDER_FILL_COMMAND: 'cat >/dev/null; echo Helpers.goLogin' },
     'alder.trace.server': process.env.ALDER_E2E_TRACE ?? 'off',
     'security.workspace.trust.enabled': false,
+    // the chat view's input editor otherwise keeps the text focus: `undo` would go there
+    'chat.disableAIFeatures': true,
   }, null, 2));
 
   const root = resolve(__dirname, '../../..');

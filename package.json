@@ -138,6 +138,11 @@
         "category": "Alder"
       },
       {
+        "command": "alder.generate.apply",
+        "title": "Apply Generator",
+        "category": "Alder"
+      },
+      {
         "command": "alder.routes",
         "title": "Routes",
         "category": "Alder"
@@ -193,12 +198,23 @@
         "category": "Alder"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        { "command": "alder.generate.apply", "when": "false" }
+      ]
+    },
     "keybindings": [
       {
         "command": "alder.generate",
         "key": "ctrl+alt+a g",
         "mac": "cmd+alt+a g",
         "when": "alder.inProject"
+      },
+      {
+        "command": "alder.generate.apply",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "alder.formOpen && inQuickOpen"
       },
       {
         "command": "alder.routes",
