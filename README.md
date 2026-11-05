@@ -66,8 +66,9 @@ All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a`
 ## Fill with AI
 
 The lightbulb on a hole (`?h`) offers "Fill ?h with AI". It sends the module's source, the names
-and types of the values in scope (including those of the app modules it imports) and the
-standard library's signatures to the configured model, together with the whole file named by
+and types of the values in scope (including those of the app modules it imports), the type
+declarations of those imported app modules with their constructors, the source text of their
+table definitions, and the standard library's signatures to the configured model, together with the whole file named by
 `ALDER_FILL_REFERENCE` when that is set. Set `ANTHROPIC_API_KEY` (and optionally
 `ALDER_FILL_MODEL`), or `ALDER_FILL_COMMAND` to a command that reads the prompt on stdin
 (it receives the same text), in the environment VS Code starts from or in `alder.serverEnv`.

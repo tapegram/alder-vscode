@@ -1,4 +1,6 @@
 import * as assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { RunOutcome } from '../../src/tests';
@@ -77,11 +79,25 @@ describe('the Test Explorer', () => {
 
   it('Cancel Test Run (the TestRun\'s own token) cancels a run started from a command', async () => {
     await open('demo/app/Demo.alder');
-    const started = vscode.commands.executeCommand<RunOutcome[]>('alder.test.run');
-    await new Promise(r => setTimeout(r, 300));
-    await vscode.commands.executeCommand('testing.cancelRun');
-    const [o] = await started;
-    assert.equal(o.kind, 'cancelled', JSON.stringify(o));
+    // a warm run finishes in a few hundred ms, before any fixed delay is sure to have passed: run
+    // a stand-in binary that marks its spawn and then blocks, and cancel once it has spawned
+    const dir = mkdtempSync(join(tmpdir(), 'alder-cancel-'));
+    const mark = join(dir, 'spawned');
+    const bin = join(dir, 'alder');
+    writeFileSync(bin, `#!/bin/sh\ntouch '${mark}'\nexec sleep 60\n`, { mode: 0o755 });
+    const clients = (await api()).clients;
+    const binary = clients.binary;
+    clients.binary = async () => bin;
+    try {
+      const started = vscode.commands.executeCommand<RunOutcome[]>('alder.test.run');
+      await until(() => existsSync(mark), 'the test run to spawn');
+      await vscode.commands.executeCommand('testing.cancelRun');
+      const [o] = await started;
+      assert.equal(o.kind, 'cancelled', JSON.stringify(o));
+    } finally {
+      clients.binary = binary;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('a token cancelled before the run starts its work cancels it without spawning', async () => {
