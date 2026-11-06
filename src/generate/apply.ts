@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import * as vscode from 'vscode';
 import type { ApplyUi, Origin, Server } from './flow';
-import { appliedMessage, changedPaths, deletePrompt, emptyDirs, failedMessage, firstStale, landing, removedPaths, seenText, staleMessage } from './planCheck';
+import { appliedMessage, changedPaths, deletePrompt, emptyDirs, failedMessage, firstStale, landing, removedPaths, seenText, staleMessage, usesTrash } from './planCheck';
 import type { PlanDiagnostic, PlanResult, Sets } from './types';
 
 // apply: the port of apply.lua. It plans the generator again with the sets the user saw, checks
@@ -78,7 +78,7 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
   };
   if (!(await unchanged())) return false;
   const removed = removedPaths(files);
-  const trash = vscode.workspace.getConfiguration('files').get<boolean>('enableTrash', true);
+  const trash = usesTrash(vscode.workspace.getConfiguration('files').get<boolean>('enableTrash', true), vscode.Uri.file(env.root).scheme, vscode.env.remoteName);
   if (removed.length > 0 && (!(await env.ui.confirm(deletePrompt(removed, trash), 'Delete')) || !(await unchanged()))) return false;
 
   const edit = new vscode.WorkspaceEdit();
