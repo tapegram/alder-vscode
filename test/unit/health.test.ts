@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, delimiter } from 'node:path';
-import { candidates, resolveBinary, checkBinary, hasLsp, report, BUILD_HINT, MISSING_TOKENS } from '../../src/health';
+import { candidates, checkBinary, hasLsp, report, BUILD_HINT, MISSING_TOKENS } from '../../src/health';
 
 function dir(): string { return realpathSync(mkdtempSync(join(tmpdir(), 'alder-health-'))); }
 
@@ -30,15 +30,15 @@ test('a bare name searches PATH, then GOBIN, GOPATH/bin, ~/go/bin, ~/bin', () =>
 
 test('the Dock case: not on PATH, found in ~/go/bin', async () => {
   const home = dir();
-  const p = fake(join(home, 'go/bin'), `echo '${TREE}'`);
-  assert.equal(await resolveBinary('alder', { PATH: '/nonexistent' }, home), p);
+  const p = fake(join(home, 'go/bin'), `case "$1" in help) echo '${TREE}';; esac`);
+  assert.equal((await checkBinary('alder', { PATH: '/nonexistent' }, home)).path, p);
 });
 
-test('a non-executable file is skipped', async () => {
+test('a non-executable file is not a candidate', async () => {
   const home = dir();
   mkdirSync(join(home, 'bin'), { recursive: true });
   writeFileSync(join(home, 'bin/alder'), 'not executable');
-  assert.equal(await resolveBinary('alder', { PATH: '' }, home), undefined);
+  assert.equal((await checkBinary('alder', { PATH: '' }, home)).path, undefined);
 });
 
 test('hasLsp needs a command tree that lists lsp', () => {
@@ -145,8 +145,8 @@ test('report lists skipped binaries', () => {
     { path: '/new/alder', version: 'alder 1.2.3', ok: true, skipped: [{ path: '/old/alder', version: 'alder v0.1.0' }, { path: '/older/alder' }] },
     [], {});
   assert.equal(lines[0], 'binary: /new/alder (alder 1.2.3)');
-  assert.equal(lines[1], 'skipped: /old/alder (alder v0.1.0): no `lsp`');
-  assert.equal(lines[2], 'skipped: /older/alder: no `lsp`');
+  assert.equal(lines[1], 'skipped: /old/alder (alder v0.1.0): failed the `lsp` check');
+  assert.equal(lines[2], 'skipped: /older/alder: failed the `lsp` check');
   assert.match(lines[3], /^ok:/);
 });
 
@@ -173,5 +173,27 @@ test('an old alder reachable twice and the only one is not also listed as skippe
   const g = await checkBinary('alder', { PATH: [old, old].join(delimiter) }, dir());
   assert.equal(g.ok, false);
   assert.equal(g.path, join(old, 'alder'));
+  assert.equal(g.skipped, undefined);
+});
+
+test('three candidates: skipped keeps the PATH order', async () => {
+  const home = dir();
+  const a = fake(dir(), OLD);
+  const b = fake(dir(), OLD);
+  const cur = fake(join(home, 'bin'), NEW);
+  const g = await checkBinary('alder', { PATH: [join(a, '..'), join(b, '..')].join(delimiter) }, home);
+  assert.equal(g.ok, true, g.problem);
+  assert.equal(g.path, cur);
+  assert.deepEqual(g.skipped?.map(s => s.path), [a, b]);
+});
+
+test('skipped is absent when the first candidate passes', async () => {
+  const home = dir();
+  const pdir = dir();
+  const first = fake(pdir, NEW);
+  fake(join(home, 'bin'), OLD);
+  const g = await checkBinary('alder', { PATH: pdir }, home);
+  assert.equal(g.ok, true, g.problem);
+  assert.equal(g.path, first);
   assert.equal(g.skipped, undefined);
 });
