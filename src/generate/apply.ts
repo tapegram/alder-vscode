@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import * as vscode from 'vscode';
 import type { ApplyUi, Origin, Server } from './flow';
-import { appliedMessage, deletePrompt, firstStale, landing, removedPaths, staleMessage } from './planCheck';
+import { appliedMessage, changedPaths, deletePrompt, emptyDirs, failedMessage, firstStale, landing, removedPaths, seenText, staleMessage } from './planCheck';
 import type { PlanDiagnostic, PlanResult, Sets } from './types';
 
 // apply: the port of apply.lua. It plans the generator again with the sets the user saw, checks
@@ -11,14 +11,30 @@ import type { PlanDiagnostic, PlanResult, Sets } from './types';
 
 export interface ApplyEnv { server: Server; root: string; ui: ApplyUi; diagnostics: vscode.DiagnosticCollection }
 
-// textOf is a file's text as the user sees it: the open document's, else the file's, else null.
+// textOf is a file's text as the user sees it (seenText): a clean document left open for a file
+// no longer on disk is not the file.
 export async function textOf(path: string): Promise<string | null> {
   const doc = vscode.workspace.textDocuments.find(d => d.uri.scheme === 'file' && d.uri.fsPath === path);
-  if (doc) return doc.getText();
+  if (doc?.isDirty) return doc.getText();
+  let disk: string | null;
   try {
-    return await fs.readFile(path, 'utf8');
+    disk = await fs.readFile(path, 'utf8');
   } catch {
-    return null;
+    disk = null;
+  }
+  return seenText(doc && { dirty: doc.isDirty, text: doc.getText() }, disk);
+}
+
+// removeEmptyDirs removes the folders a removed file leaves empty (emptyDirs), as the CLI does.
+async function removeEmptyDirs(root: string, removed: string[]): Promise<void> {
+  for (const path of removed) {
+    for (const dir of emptyDirs(path)) {
+      try {
+        await fs.rmdir(join(root, dir));
+      } catch {
+        break; // not empty
+      }
+    }
   }
 }
 
@@ -62,7 +78,8 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
   };
   if (!(await unchanged())) return false;
   const removed = removedPaths(files);
-  if (removed.length > 0 && (!(await env.ui.confirm(deletePrompt(removed), 'Delete')) || !(await unchanged()))) return false;
+  const trash = vscode.workspace.getConfiguration('files').get<boolean>('enableTrash', true);
+  if (removed.length > 0 && (!(await env.ui.confirm(deletePrompt(removed, trash), 'Delete')) || !(await unchanged()))) return false;
 
   const edit = new vscode.WorkspaceEdit();
   // versions: each replaced document's version when its range was taken
@@ -91,9 +108,11 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
     return false;
   }
   if (!(await vscode.workspace.applyEdit(edit))) {
-    env.ui.error(`alder: ${id} could not be applied; nothing applied`);
+    // applyEdit is not atomic: say which files changed anyway
+    env.ui.error(failedMessage(id, await changedPaths(files, rel => textOf(join(env.root, rel)))));
     return false;
   }
+  await removeEmptyDirs(env.root, removed);
 
   const active = vscode.window.activeTextEditor?.document.uri;
   const activeRel = active?.scheme === 'file' ? relative(env.root, active.fsPath).split(sep).join('/') : undefined;

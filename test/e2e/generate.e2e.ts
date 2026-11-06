@@ -90,6 +90,7 @@ describe('Generate: the flow', () => {
       return acts?.filter(a => a.command?.command === 'alder.generate').length ? acts : undefined;
     }, 'generator code actions');
     const action = actions.find(a => a.command?.command === 'alder.generate')!;
+    const preset = action.command!.arguments![0] as { id: string; sets?: Record<string, string> };
     const ui = new FakeUi();
     let picked = false;
     ui.onPick = () => { picked = true; return undefined; };
@@ -97,10 +98,56 @@ describe('Generate: the flow', () => {
     const form = await until(() => ui.openForm ?? ui.texts[0], 'the form or its first field');
     assert.ok(!picked);
     assert.ok(form);
-    if (ui.texts[0]) ui.texts[0].finish(undefined);
-    await until(() => ui.openForm, 'the form');
-    ui.openForm!.answer({ kind: 'escape' });
+    const ready = await until(() => {
+      // the first field's editor may open after the form: escape it (a finished one ignores this)
+      for (const t of ui.texts) t.finish(undefined);
+      return ui.openForm && !ui.openForm.model.updating && ui.openForm.model.rows.length > 0 ? ui.openForm : undefined;
+    }, 'the form with its fields');
+    assert.ok(ready.model.title.startsWith(`${preset.id}  `), ready.model.title);
+    // the action's sets reached the form: each field it sets shows its value
+    const shown = Object.entries(preset.sets ?? {}).filter(([k]) => ready.model.rows.some(r => r.name === k));
+    assert.ok(shown.length > 0, `no field of the action's sets is on the form: ${JSON.stringify(preset)}`);
+    for (const [k, v] of shown) assert.equal(ready.model.rows.find(r => r.name === k)!.value, v, k);
+    ready.answer({ kind: 'escape' });
     await running;
+  });
+
+  it('two quick invocations start one flow: the newer one', async () => {
+    await open('gen/app/Posts/Index.alder');
+    const first = new FakeUi();
+    const second = new FakeUi();
+    let firstDone = false;
+    const one = Promise.resolve(vscode.commands.executeCommand('alder.generate', 'new page', first)).then(() => { firstDone = true; });
+    const two = vscode.commands.executeCommand('alder.generate', 'new page', second);
+    await until(() => firstDone, 'the older invocation to end', 5000);
+    await one;
+    const form = await until(() => {
+      // the first field's editor may be up: escape it
+      for (const t of second.texts) t.finish(undefined);
+      return second.openForm;
+    }, 'the newer flow\'s form');
+    assert.equal(first.forms.length + first.texts.length, 0, 'the older invocation started a flow too');
+    form.answer({ kind: 'escape' });
+    await two;
+  });
+
+  it('refusal diagnostics go on the next edit of their document, and all of them when a new flow starts', async () => {
+    const editor = await open('gen/app/Posts/Index.alder');
+    const g = (await api()).generate;
+    const other = vscode.Uri.file(join(ws(), 'gen/app/App.alder'));
+    const d = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), 'E0 refused', vscode.DiagnosticSeverity.Error);
+    g.diagnostics.set([[editor.document.uri, [d]], [other, [d]]]);
+    try {
+      await editor.edit(b => b.insert(new vscode.Position(0, 0), '-- typed\n'));
+      await until(() => !g.diagnostics.has(editor.document.uri), 'the edited document\'s diagnostics to go');
+      assert.ok(g.diagnostics.has(other), 'an edit cleared another document\'s diagnostics');
+      // a new flow (its picker escaped) clears what is left
+      await vscode.commands.executeCommand('alder.generate', undefined, new FakeUi());
+      assert.ok(!g.diagnostics.has(other));
+    } finally {
+      g.diagnostics.clear();
+      await revert(editor.document);
+    }
   });
 
   it('the real picker closes the flow on hide', async () => {

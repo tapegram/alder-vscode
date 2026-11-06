@@ -14,7 +14,8 @@ import { quickInputUi } from './ui';
 // alder.generate.apply (Ctrl+Enter in the form). One flow at a time: a new one closes the old.
 export class Generate {
   readonly diagnostics = vscode.languages.createDiagnosticCollection('alder generate');
-  private active: Flow | undefined;
+  // active: the slot of the newest run, claimed before its origin is found; its flow once started
+  private active: { closed: boolean; flow?: Flow } | undefined;
   private count = 0;
   // planPaths: each flow's plan documents (its VirtualDocs paths), freed when the flow ends
   private readonly planPaths = new Map<number, Set<string>>();
@@ -26,7 +27,11 @@ export class Generate {
       this.diagnostics,
       vscode.commands.registerCommand('alder.generate', (preset?: unknown, ui?: FlowUi) =>
         this.run(preset, ui && typeof ui.form === 'function' ? ui : undefined)),
-      vscode.commands.registerCommand('alder.generate.apply', () => this.active?.answer({ kind: 'apply' })),
+      vscode.commands.registerCommand('alder.generate.apply', () => this.active?.flow?.answer({ kind: 'apply' })),
+      // a refusal's diagnostics describe the dry-run copy: an edit of their document ends them
+      vscode.workspace.onDidChangeTextDocument(e => {
+        if (e.contentChanges.length > 0 && this.diagnostics.has(e.document.uri)) this.diagnostics.delete(e.document.uri);
+      }),
     );
   }
 
@@ -69,25 +74,33 @@ export class Generate {
   }
 
   async run(arg?: unknown, ui: FlowUi = quickInputUi()): Promise<void> {
-    this.active?.close();
-    const found = await findOrigin(this.deps.clients);
-    if (!found) return;
+    if (this.active) {
+      this.active.closed = true;
+      this.active.flow?.close();
+    }
+    // a new flow: the last one's refusal (its diagnostics) is over
+    this.diagnostics.clear();
+    // claimed before findOrigin awaits, so a second quick run supersedes this one
+    const slot: { closed: boolean; flow?: Flow } = { closed: false };
+    this.active = slot;
     const n = ++this.count;
-    const { origin, client } = found;
-    const server: Server = { request: (m, p) => client.sendRequest(m, p), running: () => client.state === State.Running };
-    const flow = new Flow({
-      server,
-      ui,
-      preview: new PreviewDoc(this.deps.docs, n),
-      apply: (id, s) => applyGenerator({ server, root: origin.root, ui, diagnostics: this.diagnostics }, origin, id, s),
-      showPlanFile: f => this.showPlanFile(n, f),
-    }, origin);
-    this.active = flow;
     try {
+      const found = await findOrigin(this.deps.clients);
+      if (!found || slot.closed) return;
+      const { origin, client } = found;
+      const server: Server = { request: (m, p) => client.sendRequest(m, p), running: () => client.state === State.Running };
+      const flow = new Flow({
+        server,
+        ui,
+        preview: new PreviewDoc(this.deps.docs, n),
+        apply: (id, s) => applyGenerator({ server, root: origin.root, ui, diagnostics: this.diagnostics }, origin, id, s),
+        showPlanFile: f => this.showPlanFile(n, f),
+      }, origin);
+      slot.flow = flow;
       await flow.start(asPreset(arg));
       await flow.done;
     } finally {
-      if (this.active === flow) this.active = undefined;
+      if (this.active === slot) this.active = undefined;
       await this.closePlans(n);
     }
   }

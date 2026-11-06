@@ -32,6 +32,13 @@ function once<T, I extends vscode.QuickPickItem>(qp: vscode.QuickPick<I>, accept
 interface FieldItem extends vscode.QuickPickItem { name?: string; apply?: boolean }
 
 export function quickInputUi(): FlowUi {
+  // steps: the steps up (all but the form), so closeSteps can hide them
+  const steps = new Set<vscode.QuickInput>();
+  const step = <Q extends vscode.QuickInput>(q: Q): Q => {
+    steps.add(q);
+    q.onDidHide(() => steps.delete(q));
+    return q;
+  };
   return {
     info: m => void vscode.window.showInformationMessage(m),
     warn: m => void vscode.window.showWarningMessage(m),
@@ -39,7 +46,7 @@ export function quickInputUi(): FlowUi {
     confirm: async (message, action) => (await vscode.window.showWarningMessage(message, { modal: true }, action)) === action,
 
     pickGenerator(rows: PickerRow[]) {
-      const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { g?: Generator }>();
+      const qp = step(vscode.window.createQuickPick<vscode.QuickPickItem & { g?: Generator }>());
       qp.title = 'Alder: Generate';
       qp.placeholder = 'a generator';
       qp.matchOnDescription = true;
@@ -108,8 +115,13 @@ export function quickInputUi(): FlowUi {
       };
     },
 
+    closeSteps() {
+      // hide answers each step's "nothing" (its onDidHide); a copy, as each hide deletes itself
+      for (const q of [...steps]) q.hide();
+    },
+
     pickOne(o) {
-      const qp = vscode.window.createQuickPick();
+      const qp = step(vscode.window.createQuickPick());
       qp.title = o.title;
       qp.placeholder = o.placeholder;
       qp.ignoreFocusOut = true;
@@ -124,7 +136,7 @@ export function quickInputUi(): FlowUi {
 
     module(o) {
       type Item = vscode.QuickPickItem & { typed?: boolean };
-      const qp = vscode.window.createQuickPick<Item>();
+      const qp = step(vscode.window.createQuickPick<Item>());
       qp.title = o.title;
       qp.ignoreFocusOut = true;
       qp.value = o.value;
@@ -147,7 +159,7 @@ export function quickInputUi(): FlowUi {
     },
 
     text(o): TextView {
-      const ib = vscode.window.createInputBox();
+      const ib = step(vscode.window.createInputBox());
       ib.title = o.title;
       ib.value = o.value;
       ib.prompt = o.prompt;
@@ -171,7 +183,7 @@ export function quickInputUi(): FlowUi {
 
     review(m: ReviewModel, o: { title: string; onActive(f: ReviewFile): void }) {
       type Item = vscode.QuickPickItem & { file?: ReviewFile };
-      const qp = vscode.window.createQuickPick<Item>();
+      const qp = step(vscode.window.createQuickPick<Item>());
       qp.title = `${o.title}: review`;
       qp.placeholder = m.canApply ? 'Enter applies · Escape goes back' : 'cannot apply · Escape goes back';
       qp.ignoreFocusOut = true;

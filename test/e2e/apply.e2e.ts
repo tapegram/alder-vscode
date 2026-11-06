@@ -1,6 +1,6 @@
 import * as assert from 'node:assert/strict';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import * as vscode from 'vscode';
 import { State } from 'vscode-languageclient/node';
 import type { Origin } from '../../src/generate/flow';
@@ -80,12 +80,54 @@ describe('Generate: apply', () => {
     assert.deepEqual(left, []);
   });
 
+  it('a clean document left open for a created file that is gone does not read as changed', async () => {
+    const { origin } = await originAt('app/Posts/Index.alder');
+    const rel = 'app/Tags3/Index.alder';
+    const path = join(gen(), rel);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, 'module Tags3.Index\n');
+    // plaintext: the client closes it on the server, which plans from the disk alone
+    const stale = await vscode.languages.setTextDocumentLanguage(await vscode.workspace.openTextDocument(vscode.Uri.file(path)), 'plaintext');
+    rmSync(dirname(path), { recursive: true, force: true });
+    assert.ok(vscode.workspace.textDocuments.includes(stale) && !stale.isDirty);
+    const ui = new FakeUi();
+    try {
+      assert.equal(await (await api()).generate.apply(origin, 'new page', { module: 'Tags3.Index', path: '/tags3' }, ui), true, ui.log.join('\n'));
+      const doc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === path);
+      assert.ok(doc && doc.isDirty);
+      assert.equal(doc.getText().split('module Tags3.Index').length, 2, doc.getText());
+    } finally {
+      for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(gen()))) await revert(d);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      rmSync(dirname(path), { recursive: true, force: true });
+    }
+  });
+
+  it('remove page re-checks the disk after the confirm: a file changed there, no editor open, aborts', async () => {
+    const { origin } = await originAt('app/Posts/Index.alder');
+    const path = join(gen(), 'app/Tags/Index.alder');
+    const before = readFileSync(path, 'utf8');
+    assert.ok(!vscode.workspace.textDocuments.some(d => d.uri.fsPath === path), 'a document is open for the file');
+    const ui = new FakeUi();
+    ui.onConfirm = () => {
+      writeFileSync(path, `${before}-- changed on disk\n`);
+      return true;
+    };
+    try {
+      assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
+      assert.equal(ui.log[1], 'error alder: app/Tags/Index.alder changed since planning; nothing applied');
+      assert.ok(existsSync(path));
+    } finally {
+      writeFileSync(path, before);
+    }
+  });
+
   it('remove page asks; No applies nothing', async () => {
     const { origin } = await originAt('app/Tags/Index.alder');
     const ui = new FakeUi();
     ui.onConfirm = () => false;
     assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
-    assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder from disk? undo cannot restore it [Delete]']);
+    assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder? it goes to the trash; undo can restore it [Delete]']);
     assert.ok(existsSync(join(gen(), 'app/Tags/Index.alder')));
   });
 
@@ -113,6 +155,7 @@ describe('Generate: apply', () => {
       assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), true, ui.log.join('\n'));
       assert.match(ui.log[1], /^info alder: applied remove page: .*app\/Tags\/Index\.alder/);
       assert.ok(!existsSync(join(gen(), 'app/Tags/Index.alder')));
+      assert.ok(!existsSync(join(gen(), 'app/Tags')), 'the empty page folder is left behind');
     } finally {
       for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(gen()))) await revert(d);
     }

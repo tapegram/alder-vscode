@@ -4,15 +4,57 @@ import type { PlanFile, PlanResult } from './types';
 // plan removes, where the cursor lands after applying, and the messages.
 
 export const staleMessage = (path: string) => `alder: ${path} changed since planning; nothing applied`;
-export const deletePrompt = (paths: string[]) => `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
+// deletePrompt names the files a plan deletes; trash is files.enableTrash (the delete moves them there).
+export function deletePrompt(paths: string[], trash: boolean): string {
+  if (!trash) return `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
+  return paths.length === 1
+    ? `Delete ${paths[0]}? it goes to the trash; undo can restore it`
+    : `Delete ${paths.join(', ')}? they go to the trash; undo can restore them`;
+}
 
-// firstStale is the first file whose text as the user sees it (textOf: the open document's,
-// else the file's, else null) is not its planned before (null for a created file: it must not exist).
+// failedMessage is a failed apply's error: applyEdit is not atomic, so it names the files that
+// changed anyway (changed: changedPaths).
+export function failedMessage(id: string, changed: string[]): string {
+  return changed.length === 0
+    ? `alder: ${id} could not be applied; nothing applied`
+    : `alder: ${id} could not be applied in full; these files changed: ${changed.join(', ')}`;
+}
+
+// firstStale is the first file whose text as the user sees it (textOf: seenText) is not its planned before (null for a created file: it must not exist).
 export async function firstStale(files: PlanFile[], textOf: (rel: string) => Promise<string | null>): Promise<string | undefined> {
   for (const f of files) {
     if ((await textOf(f.path)) !== f.before) return f.path;
   }
   return undefined;
+}
+
+// seenText is a file's text as the user sees it, from its open document (if any) and disk (its
+// text, null when it does not exist): a dirty document's text; else none when the file is not on
+// disk, for a clean document of a missing file is stale (a created file reverted and removed);
+// else the document's, else the disk's.
+export function seenText(doc: { dirty: boolean; text: string } | undefined, disk: string | null): string | null {
+  if (doc?.dirty) return doc.text;
+  if (disk === null) return null;
+  return doc ? doc.text : disk;
+}
+
+// emptyDirs are the folders to remove after removing path, while they are empty, innermost
+// first, up to app/'s level: the CLI's removeEmptyDirs (app/Posts/ after Posts.Index).
+export function emptyDirs(path: string): string[] {
+  const parent = (p: string) => p.split('/').slice(0, -1).join('/');
+  const out: string[] = [];
+  for (let dir = parent(path); dir !== '' && dir !== 'app'; dir = parent(dir)) out.push(dir);
+  return out;
+}
+
+// changedPaths are the files whose text as the user sees it (textOf: seenText) is no longer their
+// planned before: after a failed apply, the ones it changed in part.
+export async function changedPaths(files: PlanFile[], textOf: (rel: string) => Promise<string | null>): Promise<string[]> {
+  const out: string[] = [];
+  for (const f of files) {
+    if ((await textOf(f.path)) !== f.before) out.push(f.path);
+  }
+  return out;
 }
 
 // removedPaths are the files a plan deletes, in plan order: the confirm names every one.
