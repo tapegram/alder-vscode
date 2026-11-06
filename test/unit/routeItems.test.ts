@@ -73,3 +73,16 @@ test('routesCliError: without a server error the usage output is not advice', ()
   const m = routesCliError(cli({ code: 2, stderr: OLD_USAGE }));
   assert.doesNotMatch(m, /update alder/);
 });
+
+test('verb reads method, falling back to kind', () => {
+  assert.equal(verb({ kind: 'msg', method: 'PATCH' }), 'PATCH');
+  assert.equal(verb({ kind: 'page', method: 'GET' }), 'GET');
+  assert.equal(verb({ kind: 'msg' }), 'POST');
+  assert.equal(verb({ kind: 'page' }), 'GET');
+});
+
+test('normalizeCli carries method through', () => {
+  const out = '[{"kind":"msg","method":"PATCH","path":"/t","module":"A","name":"Toggle","file":"a.alder","line":1,"col":1}]';
+  assert.equal(normalizeCli(out, '/p')[0].method, 'PATCH');
+  assert.equal(normalizeCli('[{"kind":"page","path":"/","module":"A","name":"Index","file":"a.alder"}]', '/p')[0].method, undefined);
+});

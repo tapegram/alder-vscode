@@ -5,6 +5,8 @@
   "patterns": [
     { "include": "#comment" },
     { "include": "#string" },
+    { "include": "#route" },
+    { "include": "#qualifiedDecl" },
     { "include": "#tag" },
     { "include": "#hole" },
     { "include": "#number" },
@@ -65,13 +67,30 @@
         }
       ]
     },
+    "route": {
+      "match": "^(route)\\s+([A-Z]\\w*)\\s*(=)\\s*(GET|POST|PUT|PATCH|DELETE)\\b",
+      "captures": {
+        "1": { "name": "storage.type.alder" },
+        "2": { "name": "entity.name.type.route.alder" },
+        "3": { "name": "keyword.operator.alder" },
+        "4": { "name": "constant.other.http-method.alder" }
+      }
+    },
+    "qualifiedDecl": {
+      "match": "^([A-Z]\\w*)(\\.)([a-z_]\\w*)(?=\\s)",
+      "captures": {
+        "1": { "name": "entity.name.namespace.route.alder" },
+        "2": { "name": "punctuation.accessor.alder" },
+        "3": { "name": "entity.name.function.alder" }
+      }
+    },
     "hole": { "name": "variable.language.hole.alder", "match": "\\?[a-z]\\w*" },
     "number": { "name": "constant.numeric.alder", "match": "\\b\\d+(\\.\\d+)?\\b" },
     "boolean": { "name": "constant.language.boolean.alder", "match": "\\b(True|False)\\b" },
     "keyword": {
       "patterns": [
         { "name": "keyword.control.import.alder", "match": "\\b(module|import|as)\\b" },
-        { "name": "storage.type.alder", "match": "\\b(type|brand|where|page|msg|form|table|capability|fake|session|login|test|requires)\\b" },
+        { "name": "storage.type.alder", "match": "\\b(type|brand|where|page|route|msg|form|table|capability|fake|session|login|test|requires)\\b" },
         { "name": "storage.type.alder", "match": "^(deploy|theme|silo)\\b" },
         { "name": "keyword.control.conditional.alder", "match": "\\b(if|then|else|match)\\b" },
         { "name": "keyword.control.loop.alder", "match": "\\b(for|in)\\b" },

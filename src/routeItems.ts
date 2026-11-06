@@ -5,8 +5,11 @@ import { CliResult, decode, reportOf } from './cli';
 // routeItems turns the routes the server (alder/routes) or the CLI (`alder routes --json`)
 // lists into one shape: an absolute file and a 0-based position (routes.lua's normalize_*).
 
+export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
 export interface Route {
   kind: string;
+  method?: Method;
   path: string;
   module: string;
   name: string;
@@ -17,6 +20,7 @@ export interface Route {
 
 export interface LspRoute {
   kind: string;
+  method?: Method;
   path: string;
   module: string;
   name: string;
@@ -26,14 +30,14 @@ export interface LspRoute {
 
 export function normalizeLsp(result: readonly LspRoute[] | null | undefined): Route[] {
   return (result ?? []).map(r => ({
-    kind: r.kind, path: r.path, module: r.module, name: r.name,
+    kind: r.kind, ...(r.method ? { method: r.method } : {}), path: r.path, module: r.module, name: r.name,
     file: fileURLToPath(r.uri),
     line: r.range?.start.line ?? 0,
     character: r.range?.start.character ?? 0,
   }));
 }
 
-interface CliRoute { kind: string; path: string; module: string; name: string; file?: string; line?: number; col?: number }
+interface CliRoute { kind: string; method?: Method; path: string; module: string; name: string; file?: string; line?: number; col?: number }
 
 // normalizeCli reads `alder routes --json`: a JSON array (or {routes: […]}, or one object)
 // decoded whole, else JSONL. Its file is root-relative and its line and col 1-based.
@@ -51,7 +55,7 @@ export function normalizeCli(stdout: string, root: string): Route[] {
   return objects.map(r => {
     const file = r.file ?? '';
     return {
-      kind: r.kind, path: r.path, module: r.module, name: r.name,
+      kind: r.kind, ...(r.method ? { method: r.method } : {}), path: r.path, module: r.module, name: r.name,
       file: isAbsolute(file) ? file : join(root, file),
       line: Math.max((r.line ?? 1) - 1, 0),
       character: Math.max((r.col ?? 1) - 1, 0),
@@ -59,8 +63,9 @@ export function normalizeCli(stdout: string, root: string): Route[] {
   });
 }
 
-export function verb(r: Pick<Route, 'kind'>): 'GET' | 'POST' {
-  return r.kind === 'msg' ? 'POST' : 'GET';
+// verb is the route's HTTP method; an alder without methods lists only kind (msg is POST).
+export function verb(r: Pick<Route, 'kind' | 'method'>): Method {
+  return r.method ?? (r.kind === 'msg' ? 'POST' : 'GET');
 }
 
 // pickItem is a route's QuickPick row: `GET /path`, then `Module.name`.

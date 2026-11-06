@@ -73,3 +73,42 @@ test('a tag and its attribute, by shape', async () => {
   const gt = await scopesOf('<p class={if a > b then "x" else "y"}>');
   assert.ok(gt.some(([t, sc]) => t === '>' && sc === 'keyword.operator.alder'), 'a > b inside braces stays an operator');
 });
+
+const routeModule = [
+  'route Index  = GET    "/"                  { filter: Todo.Filter = All } requires user',
+  'route Toggle = PATCH  "/todos/{id}/toggle" { id: Todo.TodoId }           requires user',
+  'route Create = POST   "/todos"             { } form NewTodo              requires user',
+  'route Delete = DELETE "/todos/{id}"        { id: Todo.TodoId }           requires user',
+  'route Put    = PUT    "/x"                 { }',
+];
+
+test('a route line: keyword, name, method, path, form, requires', async () => {
+  const l = routeModule[2];
+  assert.equal(await scopeOf(l, 'route'), 'storage.type.alder');
+  assert.equal(await scopeOf(l, 'Create'), 'entity.name.type.route.alder');
+  assert.equal(await scopeOf(l, 'POST'), 'constant.other.http-method.alder');
+  assert.equal(await scopeOf(l, 'form'), 'storage.type.alder');
+  assert.equal(await scopeOf(l, 'requires'), 'storage.type.alder');
+  const s = await scopesOf(l);
+  assert.ok(s.some(([t, sc]) => t === '"' && sc.startsWith('string.quoted.double')));
+});
+
+test('every method is a method', async () => {
+  for (const [line, m] of [[routeModule[0], 'GET'], [routeModule[1], 'PATCH'], [routeModule[3], 'DELETE'], [routeModule[4], 'PUT']]) {
+    assert.equal(await scopeOf(line, m), 'constant.other.http-method.alder', line);
+  }
+});
+
+test('a qualified declaration name splits into route and member', async () => {
+  const sig = 'Toggle.update : Toggle.Params -> Session -> Task Response';
+  assert.deepEqual((await scopesOf(sig)).slice(0, 3), [
+    ['Toggle', 'entity.name.namespace.route.alder'],
+    ['.', 'punctuation.accessor.alder'],
+    ['update', 'entity.name.function.alder'],
+  ]);
+  const def = await scopesOf('Row.view t session =');
+  assert.equal(def[0][1], 'entity.name.namespace.route.alder');
+  assert.equal(def[2][1], 'entity.name.function.alder');
+  // a qualified type in a signature is not a declaration name
+  assert.notEqual(await scopeOf(sig, 'Params'), 'entity.name.function.alder');
+});
