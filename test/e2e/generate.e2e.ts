@@ -121,7 +121,11 @@ describe('Generate: the flow', () => {
     const two = vscode.commands.executeCommand('alder.generate', 'new page', second);
     await until(() => firstDone, 'the older invocation to end', 5000);
     await one;
-    const form = await until(() => second.openForm, 'the newer flow\'s form');
+    const form = await until(() => {
+      // the first field's editor may be up: escape it
+      for (const t of second.texts) t.finish(undefined);
+      return second.openForm;
+    }, 'the newer flow\'s form');
     assert.equal(first.forms.length + first.texts.length, 0, 'the older invocation started a flow too');
     form.answer({ kind: 'escape' });
     await two;
