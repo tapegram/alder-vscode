@@ -4,12 +4,23 @@ import type { PlanFile, PlanResult } from './types';
 // plan removes, where the cursor lands after applying, and the messages.
 
 export const staleMessage = (path: string) => `alder: ${path} changed since planning; nothing applied`;
-// deletePrompt names the files a plan deletes; trash is files.enableTrash (the delete moves them there).
+// deletePrompt names the files a plan deletes. VS Code's Undo does not bring a file deleted by an
+// edit back, with the trash on or off (the delete e2e), so the prompt says so; trash says where
+// the files go: true only when files.enableTrash is on and the file system has a trash.
 export function deletePrompt(paths: string[], trash: boolean): string {
-  if (!trash) return `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
-  return paths.length === 1
-    ? `Delete ${paths[0]}? it goes to the trash; undo can restore it`
-    : `Delete ${paths.join(', ')}? they go to the trash; undo can restore them`;
+  const one = paths.length === 1;
+  if (!trash) return `Delete ${paths.join(', ')} from disk? undo will not bring ${one ? 'it' : 'them'} back`;
+  return one
+    ? `Delete ${paths[0]}? it goes to the trash; undo will not bring it back`
+    : `Delete ${paths.join(', ')}? they go to the trash; undo will not bring them back`;
+}
+
+// usesTrash is whether a delete moves the files to the trash: files.enableTrash is on and the
+// workspace is local files. VS Code has no API for a file system provider's trash capability
+// (FileSystemProviderCapabilities.Trash is internal); remote and virtual file systems have none,
+// so the trash is only named for plain files outside a remote window.
+export function usesTrash(enableTrash: boolean, scheme: string, remote: string | undefined): boolean {
+  return enableTrash && scheme === 'file' && !remote;
 }
 
 // failedMessage is a failed apply's error: applyEdit is not atomic, so it names the files that

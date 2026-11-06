@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appliedMessage, changedPaths, deletePrompt, emptyDirs, removedPaths, firstStale, failedMessage, landing, seenText, staleMessage } from '../../src/generate/planCheck';
+import { appliedMessage, changedPaths, deletePrompt, emptyDirs, usesTrash, removedPaths, firstStale, failedMessage, landing, seenText, staleMessage } from '../../src/generate/planCheck';
 import type { PlanFile, PlanResult } from '../../src/generate/types';
 
 const files: PlanFile[] = [
@@ -22,11 +22,11 @@ test('planCheck: removedPaths and the messages', () => {
   const two: PlanFile = { path: 'app/Old2.alder', action: 'removed', before: 'old2\n', after: null };
   assert.deepEqual(removedPaths([...files, two]), ['app/Old.alder', 'app/Old2.alder']);
   assert.equal(staleMessage('app/A.alder'), 'alder: app/A.alder changed since planning; nothing applied');
-  assert.equal(deletePrompt(['app/Old.alder'], false), 'Delete app/Old.alder from disk? undo cannot restore it');
-  assert.equal(deletePrompt(['app/Old.alder', 'app/Old2.alder'], false), 'Delete app/Old.alder, app/Old2.alder from disk? undo cannot restore it');
-  // files.enableTrash: the file goes to the trash, and undo can restore it
-  assert.equal(deletePrompt(['app/Old.alder'], true), 'Delete app/Old.alder? it goes to the trash; undo can restore it');
-  assert.equal(deletePrompt(['app/Old.alder', 'app/Old2.alder'], true), 'Delete app/Old.alder, app/Old2.alder? they go to the trash; undo can restore them');
+  assert.equal(deletePrompt(['app/Old.alder'], false), 'Delete app/Old.alder from disk? undo will not bring it back');
+  assert.equal(deletePrompt(['app/Old.alder', 'app/Old2.alder'], false), 'Delete app/Old.alder, app/Old2.alder from disk? undo will not bring them back');
+  // files.enableTrash: the wording names the trash only when it is used
+  assert.equal(deletePrompt(['app/Old.alder'], true), 'Delete app/Old.alder? it goes to the trash; undo will not bring it back');
+  assert.equal(deletePrompt(['app/Old.alder', 'app/Old2.alder'], true), 'Delete app/Old.alder, app/Old2.alder? they go to the trash; undo will not bring them back');
   const plan: PlanResult = { files, holes: [] };
   assert.equal(appliedMessage('remove page', plan), 'alder: applied remove page: app/A.alder, app/New.alder, app/Old.alder');
   const hole = { name: 'h', type: 'Int', module: 'A', decl: 'view', file: 'app/A.alder', line: 4, col: 7 };
@@ -74,4 +74,11 @@ test('planCheck: after a failed apply, changedPaths are the files no longer as p
   assert.equal(failedMessage('new page', []), 'alder: new page could not be applied; nothing applied');
   assert.equal(failedMessage('new page', ['app/A.alder', 'app/New.alder']),
     'alder: new page could not be applied in full; these files changed: app/A.alder, app/New.alder');
+});
+
+test('usesTrash: only with enableTrash on, plain files, and no remote', () => {
+  assert.equal(usesTrash(true, 'file', undefined), true);
+  assert.equal(usesTrash(false, 'file', undefined), false);
+  assert.equal(usesTrash(true, 'vscode-vfs', undefined), false);
+  assert.equal(usesTrash(true, 'file', 'ssh-remote'), false);
 });

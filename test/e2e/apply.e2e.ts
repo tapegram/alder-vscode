@@ -127,7 +127,7 @@ describe('Generate: apply', () => {
     const ui = new FakeUi();
     ui.onConfirm = () => false;
     assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
-    assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder? it goes to the trash; undo can restore it [Delete]']);
+    assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder? it goes to the trash; undo will not bring it back [Delete]']);
     assert.ok(existsSync(join(gen(), 'app/Tags/Index.alder')));
   });
 
@@ -146,6 +146,39 @@ describe('Generate: apply', () => {
       await revert(editor.document);
     }
   });
+
+  // undoing a delete: VS Code does not bring the file back with Undo, whatever files.enableTrash
+  // says (checked on 1.145: no editor, another editor, the explorer, the reopened tab, a dirty
+  // editor all leave it deleted), so the prompt must not promise it
+  for (const trash of [true, false]) {
+    it(`remove page, then undo, does not bring the file back (files.enableTrash ${trash}); the prompt says so`, async () => {
+      const { origin } = await originAt('app/Tags/Index.alder');
+      const path = join(gen(), 'app/Tags/Index.alder');
+      const before = readFileSync(path, 'utf8');
+      const files = vscode.workspace.getConfiguration('files');
+      await files.update('enableTrash', trash, vscode.ConfigurationTarget.Workspace);
+      const ui = new FakeUi();
+      ui.onConfirm = () => true;
+      try {
+        assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), true, ui.log.join('\n'));
+        assert.ok(!existsSync(path), 'the delete did not remove the file');
+        assert.equal(ui.log[0], trash
+          ? 'confirm Delete app/Tags/Index.alder? it goes to the trash; undo will not bring it back [Delete]'
+          : 'confirm Delete app/Tags/Index.alder from disk? undo will not bring it back [Delete]');
+        // with another editor active, and with the explorer focused
+        await open('gen/app/Posts/Index.alder');
+        await vscode.commands.executeCommand('undo');
+        await vscode.commands.executeCommand('workbench.files.action.focusFilesExplorer');
+        await vscode.commands.executeCommand('undo');
+        await assert.rejects(until(() => existsSync(path), 'undo to bring the file back', 2000));
+      } finally {
+        await files.update('enableTrash', undefined, vscode.ConfigurationTarget.Workspace);
+        mkdirSync(dirname(path), { recursive: true });
+        if (!existsSync(path)) writeFileSync(path, before);
+        for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(gen()))) await revert(d);
+      }
+    });
+  }
 
   it('remove page with Delete removes the file', async () => {
     const { origin } = await originAt('app/Tags/Index.alder');
