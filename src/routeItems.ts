@@ -1,6 +1,6 @@
 import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decode } from './cli';
+import { CliResult, decode, reportOf } from './cli';
 
 // routeItems turns the routes the server (alder/routes) or the CLI (`alder routes --json`)
 // lists into one shape: an absolute file and a 0-based position (routes.lua's normalize_*).
@@ -66,4 +66,16 @@ export function verb(r: Pick<Route, 'kind'>): 'GET' | 'POST' {
 // pickItem is a route's QuickPick row: `GET /path`, then `Module.name`.
 export function pickItem(r: Route): { label: string; description: string } {
   return { label: `${verb(r)} ${r.path}`, description: `${r.module}.${r.name}` };
+}
+
+// routesCliError says why `alder routes --json` failed: its own JSON error or output as is. Only
+// when the server failed first (lspError) and the CLI did not know the command (exit 2, no JSON
+// error) do both predate routes: then the advice is to update alder.
+export function routesCliError(res: CliResult, lspError?: string): string {
+  const unknown = res.code === 2 && typeof res.json?.error !== 'string' && !/^alder routes:/m.test(res.stderr);
+  if (lspError !== undefined && unknown) {
+    return `this alder has no routes command (${lspError}): update alder (go install ./cmd/alder in the alder repo), then Alder: Restart Server`;
+  }
+  const r = reportOf(['routes'], res, { bugOn2: false });
+  return r.kind === 'error' ? r.message : '';
 }

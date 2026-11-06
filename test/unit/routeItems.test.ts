@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-import { normalizeCli, normalizeLsp, pickItem, verb } from '../../src/routeItems';
+import { normalizeCli, normalizeLsp, pickItem, routesCliError, verb } from '../../src/routeItems';
+import type { CliResult } from '../../src/cli';
 
 const lsp = (root: string) => [
   { kind: 'page', path: '/sites/:id', module: 'Sites.Clarity.Index', name: 'page',
@@ -43,4 +44,32 @@ test('a msg is POST, a page GET; the pick shows the verb and path, then the decl
   assert.equal(verb(msg), 'POST');
   assert.deepEqual(pickItem(page), { label: 'GET /sites/:id', description: 'Sites.Clarity.Index.page' });
   assert.deepEqual(pickItem(msg), { label: 'POST /sites/:id/delete', description: 'Sites.Clarity.Index.Delete' });
+});
+
+const cli = (o: Partial<CliResult>): CliResult => ({
+  code: 0, signal: null, stdout: '', stderr: '', objects: [], json: undefined, cancelled: false, ...o,
+});
+const OLD_USAGE = 'usage: alder <command> [arguments]\n\n  build  compile\n';
+
+test('routesCliError: an old alder (usage on exit 2) after a server error gets the update advice', () => {
+  const m = routesCliError(cli({ code: 2, stderr: OLD_USAGE }), 'Unhandled method alder/routes');
+  assert.match(m, /update alder/);
+  assert.match(m, /Unhandled method alder\/routes/);
+});
+
+test('routesCliError: exit 2 with an `alder routes:` message gives that message, not advice', () => {
+  const m = routesCliError(cli({ code: 2, stderr: 'alder routes: no .alder files under /x/app\n' }), 'Unhandled method alder/routes');
+  assert.match(m, /no \.alder files under \/x\/app/);
+  assert.doesNotMatch(m, /update alder/);
+});
+
+test('routesCliError: a JSON error gives its message', () => {
+  const m = routesCliError(cli({ code: 2, json: { error: 'boom' } }), 'server down');
+  assert.match(m, /boom/);
+  assert.doesNotMatch(m, /update alder/);
+});
+
+test('routesCliError: without a server error the usage output is not advice', () => {
+  const m = routesCliError(cli({ code: 2, stderr: OLD_USAGE }));
+  assert.doesNotMatch(m, /update alder/);
 });
