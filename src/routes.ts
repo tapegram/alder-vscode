@@ -3,9 +3,10 @@ import { State } from 'vscode-languageclient/node';
 import { run } from './cli';
 import { cliEnv, Deps } from './deps';
 import { requireRoot } from './project';
-import { normalizeCli, normalizeLsp, pickItem, LspRoute, Route } from './routeItems';
+import { normalizeCli, normalizeLsp, pickItem, routesCliError, LspRoute, Route } from './routeItems';
 
-export type Fetched = { routes: Route[] } | { error: string };
+// reported: the error was already shown (a failed binary gate), so show nothing more
+export type Fetched = { routes: Route[] } | { error: string; reported?: true };
 
 export interface RouteItem extends vscode.QuickPickItem { route: Route }
 
@@ -18,21 +19,20 @@ const quickPick: RouteUi = {
   })),
 };
 
-export const UPDATE_ROUTES = (lspError: string) =>
-  `this alder has no routes command (${lspError}): update alder (go install ./cmd/alder in the alder repo), then Alder: Restart Server`;
-
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-// fetchRoutes asks the root's server (alder/routes); with no running server, or an error from
-// it (an alder older than alder/routes), it asks the CLI.
+// fetchRoutes asks the root's server (alder/routes); with no running server, an empty list (it
+// answers [] before its first good build) or an error from it (an alder older than
+// alder/routes), it asks the CLI.
 export async function fetchRoutes(deps: Deps, root: string): Promise<Fetched> {
   const client = await deps.clients.forUri(vscode.Uri.file(root));
   let lspError: string | undefined;
   if (client && client.state === State.Running) {
     try {
-      return { routes: normalizeLsp(await client.sendRequest<LspRoute[] | null>('alder/routes', {})) };
+      const routes = normalizeLsp(await client.sendRequest<LspRoute[] | null>('alder/routes', {}));
+      if (routes.length > 0) return { routes };
     } catch (err) {
       lspError = message(err);
     }
@@ -41,16 +41,12 @@ export async function fetchRoutes(deps: Deps, root: string): Promise<Fetched> {
 }
 
 // fetchCli runs `alder routes --json` from the root. lspError is the server's error when it
-// was asked first: if both fail, the server and the binary predate routes.
+// was asked first: if both fail, the server and the binary may predate routes.
 export async function fetchCli(deps: Deps, root: string, lspError?: string): Promise<Fetched> {
   const bin = await deps.clients.binary();
-  if (!bin) return { error: 'the alder binary failed its check — Alder: Show Health' };
+  if (!bin) return { error: 'the alder binary failed its check — Alder: Show Health', reported: true };
   const res = await run(bin, ['routes', '--json'], { cwd: root, env: cliEnv() });
-  if (res.code !== 0) {
-    if (lspError !== undefined) return { error: UPDATE_ROUTES(lspError) };
-    const text = (res.stderr.trim() !== '' ? res.stderr : res.stdout).trim();
-    return { error: text !== '' ? text : `alder routes exited ${res.code}` };
-  }
+  if (res.code !== 0) return { error: routesCliError(res, lspError) };
   return { routes: normalizeCli(res.stdout, root) };
 }
 
@@ -68,7 +64,7 @@ export async function pickRoutes(deps: Deps, ui: RouteUi = quickPick): Promise<R
   if (!root) return undefined;
   const got = await fetchRoutes(deps, root);
   if ('error' in got) {
-    void vscode.window.showErrorMessage(`alder routes: ${got.error}`);
+    if (!got.reported) void vscode.window.showErrorMessage(`alder routes: ${got.error}`);
     return undefined;
   }
   if (got.routes.length === 0) {

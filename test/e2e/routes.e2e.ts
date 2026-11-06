@@ -45,11 +45,12 @@ describe('Alder: Routes', () => {
     assert.deepEqual(cli.routes.map(key).sort(), lsp.routes.map(key).sort());
   });
 
-  it('when the server failed too, the CLI error says to update alder', async () => {
+  it('a CLI failure after a server error is the CLI\'s own, not update advice', async () => {
     // a root with no app/ makes `alder routes --json` fail; the server error is passed in
     const got = await (await api()).routes.fetchCli(ws(), 'Unhandled method alder/routes');
     assert.ok('error' in got);
-    assert.match(got.error, /^this alder has no routes command \(Unhandled method alder\/routes\): update alder/);
+    assert.notEqual(got.error.trim(), '');
+    assert.doesNotMatch(got.error, /update alder/);
   });
 
   it('picking a route opens its declaration', async () => {

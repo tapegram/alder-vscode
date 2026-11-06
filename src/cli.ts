@@ -77,13 +77,15 @@ export type Report = { kind: 'error'; message: string } | { kind: 'bug' };
 
 // reportOf says how to show a failed run without rewording it: a JSON `error` as is; a usage
 // or internal failure (exit 2) as a bug report (unless o.bugOn2 is false); anything else as its
-// stderr, else its stdout, else `alder <command> exited <code>`.
+// stderr, else its stdout, else `alder <command> exited <code>` (or `was killed by <signal>`).
 export function reportOf(args: string[], res: CliResult, o: { bugOn2?: boolean } = {}): Report {
   const err = res.json?.error;
   if (typeof err === 'string') return { kind: 'error', message: err };
   if (res.code === 2 && o.bugOn2 !== false) return { kind: 'bug' };
   const text = (res.stderr.trim() !== '' ? res.stderr : res.stdout).trim();
-  return { kind: 'error', message: text !== '' ? text : `alder ${args[0]} exited ${res.code}` };
+  if (text !== '') return { kind: 'error', message: text };
+  const how = res.code === null && res.signal ? `was killed by ${res.signal}` : `exited ${res.code}`;
+  return { kind: 'error', message: `alder ${args[0]} ${how}` };
 }
 
 // bugText is the bug report document: the command, its output and `alder version`.

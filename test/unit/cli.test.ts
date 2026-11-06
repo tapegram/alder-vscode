@@ -74,6 +74,7 @@ test('reportOf: a JSON error as is, exit 2 a bug, else stderr, stdout or the exi
   assert.deepEqual(reportOf(['test'], res({ code: 1, stderr: '  tests fail: fix them\n' })), { kind: 'error', message: 'tests fail: fix them' });
   assert.deepEqual(reportOf(['test'], res({ code: 1, stdout: 'out\n' })), { kind: 'error', message: 'out' });
   assert.deepEqual(reportOf(['test', '--json'], res({ code: 3 })), { kind: 'error', message: 'alder test exited 3' });
+  assert.deepEqual(reportOf(['test'], res({ code: null, signal: 'SIGKILL' })), { kind: 'error', message: 'alder test was killed by SIGKILL' });
 });
 
 test('bugText names the command, the output and the version', () => {
