@@ -5,6 +5,7 @@ import { requireRoot } from '../project';
 import { findRoot } from '../root';
 import { entryFile } from './entry';
 import type { Origin } from './flow';
+import { within } from './within';
 
 const WAIT_MS = 5000;
 
@@ -30,7 +31,7 @@ export async function findOrigin(clients: Clients): Promise<{ origin: Origin; cl
     return undefined;
   }
   const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-  const client = await Promise.race([clients.ensure(doc), new Promise<undefined>(r => setTimeout(() => r(undefined), WAIT_MS))]);
+  const client = await within(clients.ensure(doc), WAIT_MS);
   if (!client) {
     void vscode.window.showErrorMessage('alder: no alder lsp running for this file');
     return undefined;
