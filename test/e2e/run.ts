@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, realpathSync } from 'node:fs';
+import { cpSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { runTests } from '@vscode/test-electron';
@@ -8,6 +8,17 @@ function need(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not set (see the plan's Task 5)`);
   return v;
+}
+
+// cleanOnSigint removes dir if the run is killed with ^C (the finally blocks do not run then);
+// the returned function stops watching.
+function cleanOnSigint(dir: string): () => void {
+  const onSigint = () => {
+    rmSync(dir, { recursive: true, force: true });
+    process.exit(130);
+  };
+  process.once('SIGINT', onSigint);
+  return () => { process.off('SIGINT', onSigint); };
 }
 
 // copyExample copies examples/<name> without build/ or databases, as the server tests do.
@@ -84,6 +95,7 @@ async function contract(): Promise<void> {
   }, null, 2));
 
   const root = resolve(__dirname, '../../..');
+  const unwatch = cleanOnSigint(ws);
   try {
     await runTests({
       version: process.env.VSCODE_VERSION ?? 'stable',
@@ -93,16 +105,30 @@ async function contract(): Promise<void> {
       extensionTestsEnv: { ALDER_E2E_WS: ws, ALDER_E2E_ONLY: process.env.ALDER_E2E_ONLY ?? '' },
     });
   } finally {
+    unwatch();
     rmSync(ws, { recursive: true, force: true });
   }
 }
 
 // dogfood runs dogfood.e2e.ts alone on a copy of a real app (ALDER_DOGFOOD_ROOT), and fails if
-// the real app's git status changed: the pass must never write to it. --ignored catches a new
-// build/ or database too (an ignored directory is one `!! dir/` line, so churn inside one is not).
+// the real app's git status or ignored files changed: the pass must never write to it.
 async function dogfood(src: string): Promise<void> {
   const bin = need('ALDER_BIN');
-  const status = () => execFileSync('git', ['status', '--porcelain', '--ignored'], { cwd: src, encoding: 'utf8' });
+  // git status shows an ignored directory as one `!! dir/` line, blind to churn inside one that
+  // already exists, so the ignored files are listed with their size and mtime as well.
+  const status = () => {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: src, encoding: 'utf8', maxBuffer: 256 << 20 });
+    const ignored = git('ls-files', '-z', '--others', '--ignored', '--exclude-standard').split('\0').filter(Boolean)
+      .map(f => {
+        try {
+          const st = statSync(join(src, f));
+          return `${f} ${st.size} ${st.mtimeMs}`;
+        } catch {
+          return `${f} gone`;
+        }
+      });
+    return git('status', '--porcelain', '--ignored') + ignored.join('\n');
+  };
   const before = status();
   // no [x] in this path: a scratch build of a real app needs its migrations (alder#172)
   const ws = realpathSync(mkdtempSync(join(tmpdir(), 'alder-vscode-dogfood-')));
@@ -124,6 +150,7 @@ async function dogfood(src: string): Promise<void> {
     'chat.disableAIFeatures': true,
   }, null, 2));
   const root = resolve(__dirname, '../../..');
+  const unwatch = cleanOnSigint(ws);
   let failed: unknown;
   try {
     await runTests({
@@ -141,8 +168,10 @@ async function dogfood(src: string): Promise<void> {
     });
   } catch (err) {
     failed = err;
+  } finally {
+    unwatch();
+    rmSync(ws, { recursive: true, force: true });
   }
-  rmSync(ws, { recursive: true, force: true });
   // the guard's failure goes with the run's own error, never in place of it
   const guard = status() !== before ? new Error(`the dogfood pass changed ${src}: git status differs`) : undefined;
   if (failed && guard) throw new AggregateError([failed, guard], `${guard.message}; and the run failed: ${(failed as Error).message}`);

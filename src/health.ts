@@ -30,11 +30,6 @@ async function executable(p: string): Promise<boolean> {
   }
 }
 
-export async function resolveBinary(setting: string, env: NodeJS.ProcessEnv, home: string): Promise<string | undefined> {
-  for (const p of candidates(setting, env, home)) if (await executable(p)) return p;
-  return undefined;
-}
-
 // hasLsp: an old alder exits 0 and prints text for `help --json`; only a command tree that
 // lists `lsp` counts.
 export function hasLsp(stdout: string): boolean {
@@ -75,14 +70,15 @@ export async function checkBinary(setting: string, env: NodeJS.ProcessEnv, home:
   if (found.length === 0) {
     return { ok: false, problem: `alder: no \`${setting}\` binary found (alder.path, PATH, $GOBIN, $GOPATH/bin, ~/go/bin, ~/bin); ${BUILD_HINT}` };
   }
+  const skippedOf = (gs: Gate[]) => gs.map(f => ({ path: f.path!, version: f.version }));
   const failed: Gate[] = [];
   for (const p of found) {
     const g = await gate(p);
-    if (g.ok) return failed.length ? { ...g, skipped: failed.map(f => ({ path: f.path!, version: f.version })) } : g;
+    if (g.ok) return failed.length ? { ...g, skipped: skippedOf(failed) } : g;
     failed.push(g);
   }
   const [first, ...rest] = failed;
-  return rest.length ? { ...first, skipped: rest.map(f => ({ path: f.path!, version: f.version })) } : first;
+  return rest.length ? { ...first, skipped: skippedOf(rest) } : first;
 }
 
 export interface RootStatus { root: string; running: boolean; tokens: boolean; scratch: boolean }
@@ -91,7 +87,7 @@ export interface RootStatus { root: string; running: boolean; tokens: boolean; s
 export function report(gate: Gate, roots: RootStatus[], env: NodeJS.ProcessEnv): string[] {
   const out: string[] = [];
   out.push(gate.path ? `binary: ${gate.path}${gate.version ? ` (${gate.version})` : ''}` : 'binary: not found');
-  for (const k of gate.skipped ?? []) out.push(`skipped: ${k.path}${k.version ? ` (${k.version})` : ''}: no \`lsp\``);
+  for (const k of gate.skipped ?? []) out.push(`skipped: ${k.path}${k.version ? ` (${k.version})` : ''}: failed the \`lsp\` check`);
   out.push(gate.ok ? 'ok: `alder help --json` lists `lsp`' : `error: ${gate.problem}`);
   for (const r of roots) {
     out.push(r.running ? `ok: alder lsp running for ${r.root}` : `warn: alder lsp for ${r.root} is stopped (Alder: Restart Server)`);

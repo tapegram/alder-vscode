@@ -14,6 +14,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$GITHUB_REF_NAME is not on main: tag a commit that is"; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -22,11 +28,17 @@ jobs:
       - run: npm run compile
       - name: notes
         run: node out/scripts/release.js notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      # rebuilt, not CI's vsix artifact: the same commit and lockfile build it again, and
+      # check-vsix guards the result (entries and the bundle's requires) before it is attached
       - name: package
         run: |
           npm run package
           node out/scripts/release.js check-vsix "alder-${GITHUB_REF_NAME#v}.vsix"
       - name: release
-        run: gh release create "$GITHUB_REF_NAME" "alder-${GITHUB_REF_NAME#v}.vsix" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+        run: |
+          # a tag with a "-" (v0.2.0-rc.1) is a prerelease
+          pre=--prerelease
+          case "$GITHUB_REF_NAME" in *-*) ;; *) pre=;; esac
+          gh release create "$GITHUB_REF_NAME" "alder-${GITHUB_REF_NAME#v}.vsix" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag $pre
         env:
           GH_TOKEN: ${{ github.token }}

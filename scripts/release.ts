@@ -31,13 +31,21 @@ export function tagVersion(tag: string, pkgVersion: string): string {
 }
 
 // releaseNotes is the body of the "## <version>" section (the heading may go on with a space and
-// more, such as a date), up to the next "## " heading, trimmed.
+// more, such as a date), up to the next "## " heading, trimmed. A "## " line inside a fenced code
+// block (``` or ~~~) is not a heading.
 export function releaseNotes(changelog: string, version: string): string {
   const lines = changelog.replace(/\r\n/g, '\n').split('\n');
-  const start = lines.findIndex(l => l === `## ${version}` || l.startsWith(`## ${version} `));
-  if (start < 0) throw new Error(`CHANGELOG.md has no "## ${version}" section`);
-  let end = lines.findIndex((l, i) => i > start && l.startsWith('## '));
-  if (end < 0) end = lines.length;
+  let fence = '';
+  const headings: number[] = [];
+  lines.forEach((l, i) => {
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(l)?.[1];
+    if (f && !fence) fence = f[0];
+    else if (f && f[0] === fence) fence = '';
+    else if (!fence && l.startsWith('## ')) headings.push(i);
+  });
+  const start = headings.find(i => lines[i] === `## ${version}` || lines[i].startsWith(`## ${version} `));
+  if (start === undefined) throw new Error(`CHANGELOG.md has no "## ${version}" section`);
+  const end = headings.find(i => i > start) ?? lines.length;
   const body = lines.slice(start + 1, end).join('\n').trim();
   if (!body) throw new Error(`CHANGELOG.md's "## ${version}" section is empty`);
   return body;
@@ -53,7 +61,9 @@ export function vsixProblems(entries: string[]): string[] {
   ];
 }
 
-// bundleRequires is every module the bundle requires by a string literal, once each, sorted.
+// bundleRequires is every module the bundle requires by a string literal, once each, sorted. It
+// sees only a literal require("…"): a dynamic require is invisible, and a guarded optional
+// require in a bundled dependency (try { require("x") } catch {}) would be a false positive.
 export function bundleRequires(js: string): string[] {
   const names = new Set<string>();
   for (const m of js.matchAll(/require\((["'])([^"']+)\1\)/g)) names.add(m[2]);
@@ -69,14 +79,16 @@ export function bundleProblems(requires: string[]): string[] {
     .map(r => `the bundle requires ${r} (not vscode or a Node built-in): bundle it or drop it`);
 }
 
-function main(argv: string[]): number {
+interface Io { out: (s: string) => void; err: (s: string) => void }
+
+// main runs a CLI command against the package at root and returns the exit code.
+export function main(argv: string[], root: string, io: Io): number {
   const [cmd, arg] = argv;
-  const root = join(__dirname, '..', '..');
   try {
     if (cmd === 'notes' && arg) {
       const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
       const v = tagVersion(arg, pkg.version);
-      process.stdout.write(releaseNotes(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), v) + '\n');
+      io.out(releaseNotes(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), v) + '\n');
       return 0;
     }
     if (cmd === 'check-vsix' && arg) {
@@ -86,15 +98,18 @@ function main(argv: string[]): number {
         const js = execFileSync('unzip', ['-p', arg, 'extension/dist/extension.js'], { encoding: 'utf8', maxBuffer: 64 << 20 });
         problems.push(...bundleProblems(bundleRequires(js)));
       }
-      for (const p of problems) process.stderr.write(p + '\n');
+      for (const p of problems) io.err(p + '\n');
       return problems.length ? 1 : 0;
     }
-    process.stderr.write('usage: release.js notes <tag> | check-vsix <file.vsix>\n');
+    io.err('usage: release.js notes <tag> | check-vsix <file.vsix>\n');
     return 2;
   } catch (e) {
-    process.stderr.write(`${(e as Error).message}\n`);
+    io.err(`${(e as Error).message}\n`);
     return 1;
   }
 }
 
-if (require.main === module) process.exitCode = main(process.argv.slice(2));
+if (require.main === module) {
+  const io = { out: (s: string) => process.stdout.write(s), err: (s: string) => process.stderr.write(s) };
+  process.exitCode = main(process.argv.slice(2), join(__dirname, '..', '..'), io);
+}
