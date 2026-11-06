@@ -58,6 +58,11 @@ class FakeUi implements FlowUi {
     return { setValidation: m => { entry.validation = m; }, result };
   }
   async review(m: ReviewModel, o: { title: string; onActive(f: ReviewFile): void }) { this.log.push('review'); return this.onReview(m, o); }
+  stepsClosed = 0;
+  closeSteps() {
+    this.stepsClosed++;
+    for (const t of this.texts) t.finish(undefined);
+  }
   get form_() { const f = this.forms[this.forms.length - 1]; assert.ok(f && !f.closed, 'no open form'); return f; }
 }
 
@@ -440,4 +445,27 @@ test('flow: an apply that throws is an error, and the flow still ends', async ()
   await flow.answer({ kind: 'apply' });
   await flow.done;
   assert.equal(ui.log.at(-1), 'error alder: boom');
+});
+
+test('flow: close closes the step the flow has open, not only the form', async () => {
+  const s = await started(ready([nameDefault]));
+  assert.equal(s.ui.texts.length, 1, 'the name editor is up');
+  s.flow.close();
+  await s.flow.done;
+  assert.equal(s.ui.stepsClosed, 1);
+  await tick();
+  assert.equal(s.ui.forms.filter(f => !f.closed).length, 0, 'the closed flow reopened its form');
+});
+
+test('flow: an editor that rejects is an error, and the form opens again', async () => {
+  const s = await started(ready([nameYou('Delete'), field({ name: 'example', kind: 'bool', value: 'true', source: 'default' })]));
+  s.ui.onPickOne = () => { throw new Error('boom'); };
+  await s.flow.answer({ kind: 'field', name: 'example' });
+  assert.ok(s.ui.log.includes('error alder: boom'), s.ui.log.join('\n'));
+  assert.ok(s.ui.form_, 'the form is open again');
+  // not left busy: the form answers again
+  s.ui.onPickOne = () => 'off';
+  await s.flow.answer({ kind: 'field', name: 'example' });
+  await tick();
+  assert.deepEqual(s.server.take('alder/preview').params.sets, { page: 'Posts.Index', example: 'false' });
 });

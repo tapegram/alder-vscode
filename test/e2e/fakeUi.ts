@@ -35,6 +35,11 @@ export class FakeUi implements FlowUi, ApplyUi {
     return { setValidation: m => { entry.validation = m; }, result };
   }
   async review(m: ReviewModel, o: { title: string; onActive(f: ReviewFile): void }) { return this.onReview(m, o); }
+  stepsClosed = 0;
+  closeSteps() {
+    this.stepsClosed++;
+    for (const t of this.texts) t.finish(undefined);
+  }
   // form is the open form, if any
   get openForm() { const f = this.forms[this.forms.length - 1]; return f && !f.closed ? f : undefined; }
 }

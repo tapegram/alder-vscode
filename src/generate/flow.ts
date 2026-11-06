@@ -34,6 +34,8 @@ export interface FlowUi extends ApplyUi {
   module(o: { title: string; value: string; suggest(text: string): { help: string; suggestions: string[] } }): Promise<string | undefined>;
   text(o: { title: string; value: string; prompt?: string; placeholder?: string; onChange(text: string): void }): TextView;
   review(m: ReviewModel, o: { title: string; onActive(f: ReviewFile): void }): Promise<'apply' | 'back'>;
+  // closeSteps hides the step that is up (picker, field editor or review), which answers its "nothing"
+  closeSteps(): void;
 }
 
 export interface PreviewSink { show(lines: string[], firstHunk: number): void; dispose(): void }
@@ -280,6 +282,8 @@ export class Flow {
     this.busy = true;
     try {
       await this.editor(name, f, title, now);
+    } catch (err) {
+      if (!this.closed) this.env.ui.error(`alder: ${message(err)}`);
     } finally {
       this.busy = false;
     }
@@ -394,6 +398,7 @@ export class Flow {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     this.closeForm();
+    this.env.ui.closeSteps();
     this.env.preview.dispose();
   }
 
