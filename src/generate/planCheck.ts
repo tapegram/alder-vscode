@@ -4,7 +4,21 @@ import type { PlanFile, PlanResult } from './types';
 // plan removes, where the cursor lands after applying, and the messages.
 
 export const staleMessage = (path: string) => `alder: ${path} changed since planning; nothing applied`;
-export const deletePrompt = (paths: string[]) => `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
+// deletePrompt names the files a plan deletes; trash is files.enableTrash (the delete moves them there).
+export function deletePrompt(paths: string[], trash: boolean): string {
+  if (!trash) return `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
+  return paths.length === 1
+    ? `Delete ${paths[0]}? it goes to the trash; undo can restore it`
+    : `Delete ${paths.join(', ')}? they go to the trash; undo can restore them`;
+}
+
+// failedMessage is a failed apply's error: applyEdit is not atomic, so it names the files that
+// changed anyway (changed: changedPaths).
+export function failedMessage(id: string, changed: string[]): string {
+  return changed.length === 0
+    ? `alder: ${id} could not be applied; nothing applied`
+    : `alder: ${id} could not be applied in full; these files changed: ${changed.join(', ')}`;
+}
 
 // firstStale is the first file whose text as the user sees it (textOf: seenText) is not its planned before (null for a created file: it must not exist).
 export async function firstStale(files: PlanFile[], textOf: (rel: string) => Promise<string | null>): Promise<string | undefined> {
@@ -30,6 +44,16 @@ export function emptyDirs(path: string): string[] {
   const parent = (p: string) => p.split('/').slice(0, -1).join('/');
   const out: string[] = [];
   for (let dir = parent(path); dir !== '' && dir !== 'app'; dir = parent(dir)) out.push(dir);
+  return out;
+}
+
+// changedPaths are the files whose text as the user sees it (textOf: seenText) is no longer their
+// planned before: after a failed apply, the ones it changed in part.
+export async function changedPaths(files: PlanFile[], textOf: (rel: string) => Promise<string | null>): Promise<string[]> {
+  const out: string[] = [];
+  for (const f of files) {
+    if ((await textOf(f.path)) !== f.before) out.push(f.path);
+  }
   return out;
 }
 

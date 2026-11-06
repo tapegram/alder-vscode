@@ -127,7 +127,7 @@ describe('Generate: apply', () => {
     const ui = new FakeUi();
     ui.onConfirm = () => false;
     assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
-    assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder from disk? undo cannot restore it [Delete]']);
+    assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder? it goes to the trash; undo can restore it [Delete]']);
     assert.ok(existsSync(join(gen(), 'app/Tags/Index.alder')));
   });
 

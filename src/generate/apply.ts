@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import * as vscode from 'vscode';
 import type { ApplyUi, Origin, Server } from './flow';
-import { appliedMessage, deletePrompt, emptyDirs, firstStale, landing, removedPaths, seenText, staleMessage } from './planCheck';
+import { appliedMessage, changedPaths, deletePrompt, emptyDirs, failedMessage, firstStale, landing, removedPaths, seenText, staleMessage } from './planCheck';
 import type { PlanDiagnostic, PlanResult, Sets } from './types';
 
 // apply: the port of apply.lua. It plans the generator again with the sets the user saw, checks
@@ -78,7 +78,8 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
   };
   if (!(await unchanged())) return false;
   const removed = removedPaths(files);
-  if (removed.length > 0 && (!(await env.ui.confirm(deletePrompt(removed), 'Delete')) || !(await unchanged()))) return false;
+  const trash = vscode.workspace.getConfiguration('files').get<boolean>('enableTrash', true);
+  if (removed.length > 0 && (!(await env.ui.confirm(deletePrompt(removed, trash), 'Delete')) || !(await unchanged()))) return false;
 
   const edit = new vscode.WorkspaceEdit();
   // versions: each replaced document's version when its range was taken
@@ -107,7 +108,8 @@ export async function applyGenerator(env: ApplyEnv, origin: Origin, id: string, 
     return false;
   }
   if (!(await vscode.workspace.applyEdit(edit))) {
-    env.ui.error(`alder: ${id} could not be applied; nothing applied`);
+    // applyEdit is not atomic: say which files changed anyway
+    env.ui.error(failedMessage(id, await changedPaths(files, rel => textOf(join(env.root, rel)))));
     return false;
   }
   await removeEmptyDirs(env.root, removed);
