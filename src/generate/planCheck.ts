@@ -6,13 +6,31 @@ import type { PlanFile, PlanResult } from './types';
 export const staleMessage = (path: string) => `alder: ${path} changed since planning; nothing applied`;
 export const deletePrompt = (paths: string[]) => `Delete ${paths.join(', ')} from disk? undo cannot restore it`;
 
-// firstStale is the first file whose text as the user sees it (textOf: the open document's,
-// else the file's, else null) is not its planned before (null for a created file: it must not exist).
+// firstStale is the first file whose text as the user sees it (textOf: seenText) is not its planned before (null for a created file: it must not exist).
 export async function firstStale(files: PlanFile[], textOf: (rel: string) => Promise<string | null>): Promise<string | undefined> {
   for (const f of files) {
     if ((await textOf(f.path)) !== f.before) return f.path;
   }
   return undefined;
+}
+
+// seenText is a file's text as the user sees it, from its open document (if any) and disk (its
+// text, null when it does not exist): a dirty document's text; else none when the file is not on
+// disk, for a clean document of a missing file is stale (a created file reverted and removed);
+// else the document's, else the disk's.
+export function seenText(doc: { dirty: boolean; text: string } | undefined, disk: string | null): string | null {
+  if (doc?.dirty) return doc.text;
+  if (disk === null) return null;
+  return doc ? doc.text : disk;
+}
+
+// emptyDirs are the folders to remove after removing path, while they are empty, innermost
+// first, up to app/'s level: the CLI's removeEmptyDirs (app/Posts/ after Posts.Index).
+export function emptyDirs(path: string): string[] {
+  const parent = (p: string) => p.split('/').slice(0, -1).join('/');
+  const out: string[] = [];
+  for (let dir = parent(path); dir !== '' && dir !== 'app'; dir = parent(dir)) out.push(dir);
+  return out;
 }
 
 // removedPaths are the files a plan deletes, in plan order: the confirm names every one.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appliedMessage, deletePrompt, removedPaths, firstStale, landing, staleMessage } from '../../src/generate/planCheck';
+import { appliedMessage, deletePrompt, emptyDirs, removedPaths, firstStale, landing, seenText, staleMessage } from '../../src/generate/planCheck';
 import type { PlanFile, PlanResult } from '../../src/generate/types';
 
 const files: PlanFile[] = [
@@ -41,4 +41,23 @@ test('planCheck: landing is the first hole, else the first created .alder file, 
   assert.deepEqual(landing({ files: edited }, 'app/A.alder'), { kind: 'file', path: 'app/B.alder' });
   assert.equal(landing({ files: [files[0]] }, 'app/A.alder'), undefined);
   assert.equal(landing({ files: [{ path: 'db/x.sql', action: 'created', before: null, after: '' }] }), undefined);
+});
+
+test('planCheck: seenText is a dirty document\'s text; a clean one for a file gone from disk reads as missing', () => {
+  assert.equal(seenText({ dirty: true, text: 'typed' }, null), 'typed');
+  assert.equal(seenText({ dirty: true, text: 'typed' }, 'disk'), 'typed');
+  // a clean document whose file is gone (deleted, or a created file reverted and removed) is stale
+  assert.equal(seenText({ dirty: false, text: 'old' }, null), null);
+  assert.equal(seenText({ dirty: false, text: '' }, null), null);
+  assert.equal(seenText({ dirty: false, text: 'doc' }, 'disk'), 'doc');
+  assert.equal(seenText(undefined, 'disk'), 'disk');
+  assert.equal(seenText(undefined, null), null);
+});
+
+test('planCheck: emptyDirs are a removed file\'s folders up to app/, innermost first', () => {
+  assert.deepEqual(emptyDirs('app/Tags/Index.alder'), ['app/Tags']);
+  assert.deepEqual(emptyDirs('app/Sites/Clarity/Index.alder'), ['app/Sites/Clarity', 'app/Sites']);
+  assert.deepEqual(emptyDirs('app/Index.alder'), []);
+  assert.deepEqual(emptyDirs('Index.alder'), []);
+  assert.deepEqual(emptyDirs('db/x.sql'), ['db']);
 });
