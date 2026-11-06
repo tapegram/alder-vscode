@@ -72,7 +72,7 @@ export function pickItem(r: Route): { label: string; description: string } {
 // when the server failed first (lspError) and the CLI did not know the command (exit 2, no JSON
 // error) do both predate routes: then the advice is to update alder.
 export function routesCliError(res: CliResult, lspError?: string): string {
-  const unknown = res.code === 2 && typeof res.json?.error !== 'string';
+  const unknown = res.code === 2 && typeof res.json?.error !== 'string' && !/^alder routes:/m.test(res.stderr);
   if (lspError !== undefined && unknown) {
     return `this alder has no routes command (${lspError}): update alder (go install ./cmd/alder in the alder repo), then Alder: Restart Server`;
   }

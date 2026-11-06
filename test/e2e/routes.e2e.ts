@@ -1,4 +1,6 @@
 import * as assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import type { RouteItem } from '../../src/routes';
@@ -45,11 +47,28 @@ describe('Alder: Routes', () => {
     assert.deepEqual(cli.routes.map(key).sort(), lsp.routes.map(key).sort());
   });
 
-  it('a CLI failure after a server error is the CLI\'s own, not update advice', async () => {
-    // a root with no app/ makes `alder routes --json` fail; the server error is passed in
+  it('an alder with no routes command gets the update advice', async () => {
+    // a stand-in binary that mimics an old alder: its overall usage on stderr, exit 2
+    const dir = mkdtempSync(join(tmpdir(), 'alder-old-'));
+    const bin = join(dir, 'alder');
+    writeFileSync(bin, '#!/bin/sh\necho "usage: alder <command> [arguments]" >&2\nexit 2\n', { mode: 0o755 });
+    const a = await api();
+    const binary = a.clients.binary;
+    a.clients.binary = async () => bin;
+    try {
+      const got = await a.routes.fetchCli(ws(), 'Unhandled method alder/routes');
+      assert.ok('error' in got);
+      assert.match(got.error, /update alder/);
+    } finally {
+      a.clients.binary = binary;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a root with no app/ gives the CLI\'s own message, not update advice', async () => {
     const got = await (await api()).routes.fetchCli(ws(), 'Unhandled method alder/routes');
     assert.ok('error' in got);
-    assert.notEqual(got.error.trim(), '');
+    assert.match(got.error, /no \.alder files/);
     assert.doesNotMatch(got.error, /update alder/);
   });
 
