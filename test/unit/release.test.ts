@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { bundleProblems, bundleRequires, EXPECTED_VSIX, releaseNotes, tagVersion, vsixProblems } from '../../scripts/release';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { bundleProblems, bundleRequires, EXPECTED_VSIX, main, releaseNotes, tagVersion, vsixProblems } from '../../scripts/release';
 
 const LOG = [
   '# Changelog',
@@ -86,4 +89,33 @@ test('bundleProblems refuses a non-builtin require', () => {
   assert.deepEqual(bundleProblems(['vscode', 'vscode-languageclient/node', 'node:path']), [
     'the bundle requires vscode-languageclient/node (not vscode or a Node built-in): bundle it or drop it',
   ]);
+});
+
+test('releaseNotes ignores a "## " line inside a fenced code block', () => {
+  const log = ['## 0.1.0', '', '- Shell:', '', '```sh', '## not a heading', 'echo hi', '```', '', '~~~', '## nor this', '~~~', '', '## 0.0.9', '', '- old'].join('\n');
+  const notes = releaseNotes(log, '0.1.0');
+  assert.ok(notes.includes('## not a heading') && notes.includes('## nor this'));
+  assert.ok(!notes.includes('old'));
+  assert.throws(() => releaseNotes(['```', '## 0.1.0', '- x', '```'].join('\n'), '0.1.0'), /no "## 0.1.0" section/);
+});
+
+function runMain(argv: string[], files: Record<string, string>): { code: number; out: string; err: string } {
+  const root = mkdtempSync(join(tmpdir(), 'alder-release-'));
+  for (const [n, c] of Object.entries(files)) writeFileSync(join(root, n), c);
+  let out = '', err = '';
+  const code = main(argv, root, { out: s => { out += s; }, err: s => { err += s; } });
+  return { code, out, err };
+}
+
+test('main notes prints the tag\'s section', () => {
+  const r = runMain(['notes', 'v0.1.0'], { 'package.json': '{"version":"0.1.0"}', 'CHANGELOG.md': LOG });
+  assert.deepEqual(r, { code: 0, out: '- First release.\n- Scratch files.\n', err: '' });
+});
+
+test('main notes fails on a tag that does not match package.json, and on bad usage', () => {
+  const files = { 'package.json': '{"version":"0.1.0"}', 'CHANGELOG.md': LOG };
+  const r = runMain(['notes', 'v0.2.0'], files);
+  assert.equal(r.code, 1);
+  assert.match(r.err, /does not match package\.json version 0\.1\.0/);
+  assert.equal(runMain([], files).code, 2);
 });
