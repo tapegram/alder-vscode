@@ -68,7 +68,8 @@ describe('Alder: Routes', () => {
   it('a root with no app/ gives the CLI\'s own message, not update advice', async () => {
     const got = await (await api()).routes.fetchCli(ws(), 'Unhandled method alder/routes');
     assert.ok('error' in got);
-    assert.match(got.error, /no \.alder files/);
+    // the CLI's own wording varies by alder version; its `alder routes:` prefix does not
+    assert.match(got.error, /alder routes:/);
     assert.doesNotMatch(got.error, /update alder/);
   });
 
