@@ -212,6 +212,26 @@ test('flow: apply while a preview is in flight does nothing; not ready opens the
   assert.ok(s.sink.disposed);
 });
 
+test('flow: a guessed page applied without editing is sent; previews still leave it to the server (alder#211)', async () => {
+  const s = setup();
+  s.ui.onPick = () => page;
+  void s.flow.start();
+  await tick();
+  s.server.take('alder/generators').resolve({ generators: [msg, page] });
+  await tick();
+  const first = s.server.take('alder/preview');
+  assert.deepEqual(first.params.sets, {});
+  const guessed = field({ name: 'page', kind: 'page', required: true, value: 'Admin.Index', source: 'default', choices: ['Admin.Index', 'Posts.Index'] });
+  first.resolve(ready([guessed, nameDefault, field({ name: 'fields', value: '' })]));
+  await tick();
+  // fillFirst offered the guessed page; the user leaves it as shown
+  assert.ok(s.ui.log.includes('pickOne new page: page'), s.ui.log.join('\n'));
+  await tick();
+  await s.flow.answer({ kind: 'apply' });
+  await s.flow.done;
+  assert.deepEqual(s.applied, [{ id: 'new page', sets: { page: 'Admin.Index', name: 'Archive' } }]);
+});
+
 test('flow: a preset skips the picker and overlays the item\'s sets', async () => {
   const s = setup();
   void s.flow.start({ id: 'new msg', sets: { name: 'Archive' } });
@@ -284,7 +304,8 @@ test('flow: review shows the plan, applies with the planned sets; back keeps the
   void s.flow.answer({ kind: 'review' });
   await tick();
   const p = s.server.take('alder/plan');
-  assert.deepEqual(p.params.sets, { page: 'Posts.Index' });
+  // the shown name (the server's value) is echoed too (alder#211)
+  assert.deepEqual(p.params.sets, { page: 'Posts.Index', name: 'Delete' });
   p.resolve(plan);
   await tick();
   assert.deepEqual(s.shownFiles, ['app/Posts/Index.alder']);
@@ -297,7 +318,7 @@ test('flow: review shows the plan, applies with the planned sets; back keeps the
   await tick();
   s.server.take('alder/plan').resolve(plan);
   await s.flow.done;
-  assert.deepEqual(s.applied, [{ id: 'new msg', sets: { page: 'Posts.Index' } }]);
+  assert.deepEqual(s.applied, [{ id: 'new msg', sets: { page: 'Posts.Index', name: 'Delete' } }]);
 });
 
 test('flow: a plan answer for sets that changed meanwhile is dropped; an empty plan says so', async () => {

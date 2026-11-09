@@ -61,7 +61,8 @@ export function rows(fields: FieldState[], typed: Typed = {}): FieldRow[] {
 }
 
 // sets is what the server gets: the preset with the typed text over it; an empty text drops the
-// key, so the server falls back to the cursor. The server's own values are never echoed back.
+// key, so the server falls back to the cursor. A preview never echoes the server's own values
+// back (shownSets does, for a plan).
 export function sets(preset: Sets | undefined, typed: Typed | undefined): Sets {
   const out: Sets = {};
   for (const [k, v] of Object.entries(preset ?? {})) if (v !== '') out[k] = v;
@@ -70,6 +71,17 @@ export function sets(preset: Sets | undefined, typed: Typed | undefined): Sets {
     else delete out[k];
   }
   return out;
+}
+
+// shownSets is what a plan or an apply sends: every value the form shows (the server's own, from
+// the visible fields), with sets over them. A value the user saw and accepted counts as chosen,
+// so a page the form guessed to open with plans (alder#211); previews send only sets, so the
+// server goes on re-deciding its values while the user edits.
+export function shownSets(fields: FieldState[] | undefined, preset: Sets | undefined, typed: Typed | undefined): Sets {
+  const out: Sets = {};
+  for (const f of visible(fields)) if (f.value) out[f.name] = f.value;
+  for (const [k, v] of Object.entries(typed ?? {})) if (v === '') delete out[k];
+  return { ...out, ...sets(preset, typed) };
 }
 
 // fuzzy is the strings of list holding query's characters in order (ignoring case), best first:

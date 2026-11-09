@@ -57,6 +57,12 @@ test('form: sets merge the preset and the typed text, dropping empties', () => {
   assert.deepEqual(form.sets(undefined, undefined), {});
 });
 
+test('form: shownSets echo every shown value under the preset and typed text (alder#211)', () => {
+  assert.deepEqual(form.shownSets(described, { name: 'Delete' }, {}), { page: 'Posts.Index', name: 'Delete' });
+  assert.deepEqual(form.shownSets(described, {}, { page: 'Posts.Show', name: '' }), { page: 'Posts.Show' });
+  assert.deepEqual(form.shownSets(fields, {}, {}), { page: 'Posts.Index', example: 'true' });
+});
+
 test('form: a default bool is not sent until toggled', () => {
   assert.equal(form.sets({}, {}).example, undefined);
   assert.equal(form.sets({}, { example: 'false' }).example, 'false');

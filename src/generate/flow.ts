@@ -1,4 +1,4 @@
-import { current, editorKind, exampleLine, FieldRow, firstInvalid, firstToFill, moduleDirs, moduleHelp, moduleSuggest, moduleText, rows, sets, Typed, visible } from './form';
+import { current, editorKind, exampleLine, FieldRow, firstInvalid, firstToFill, moduleDirs, moduleHelp, moduleSuggest, moduleText, rows, sets, shownSets, Typed, visible } from './form';
 import { PickerRow, pickerRows } from './picker';
 import { firstHunk, render } from './preview';
 import { ReviewFile, ReviewModel, reviewModel } from './review';
@@ -108,6 +108,11 @@ export class Flow {
 
   private sets(): Sets {
     return sets(this.preset, this.typed);
+  }
+
+  // shownSets are the sets a plan or an apply sends: the shown values too (alder#211)
+  private shownSets(): Sets {
+    return shownSets(this.fields, this.preset, this.typed);
   }
 
   async start(preset?: Preset): Promise<void> {
@@ -343,7 +348,7 @@ export class Flow {
       if (i !== undefined) void this.edit(this.fields[i].name);
       return;
     }
-    await this.applyWith(this.sel.id, this.sets());
+    await this.applyWith(this.sel.id, this.shownSets());
   }
 
   private async applyWith(id: string, s: Sets): Promise<void> {
@@ -360,7 +365,7 @@ export class Flow {
   private async review(): Promise<void> {
     const sel = this.sel;
     if (!sel) return;
-    const planned = this.sets();
+    const planned = this.shownSets();
     let plan: PlanResult | null;
     try {
       plan = await this.env.server.request<PlanResult | null>('alder/plan', this.params({ id: sel.id, sets: planned }));
@@ -372,7 +377,7 @@ export class Flow {
     }
     // the form changed while the plan was in flight: it is not the plan of what is on screen
     // an editor opened while the plan was in flight: showing the review would hide it
-    if (this.closed || this.busy || this.sel !== sel || !sameSets(planned, this.sets())) return;
+    if (this.closed || this.busy || this.sel !== sel || !sameSets(planned, this.shownSets())) return;
     const m = reviewModel(plan);
     if (m.files.length === 0 && m.canApply) {
       this.env.ui.info('alder: nothing to change');
