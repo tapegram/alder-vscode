@@ -63,6 +63,24 @@ describe('Generate: apply', () => {
     }
   });
 
+  it('new route --blank lands on the first hole', async () => {
+    const { origin } = await originAt('app/Posts/Index.alder');
+    const ui = new FakeUi();
+    const rel = 'app/Tags4/Index.alder';
+    try {
+      assert.equal(await (await api()).generate.apply(origin, 'new route', { module: 'Tags4.Index', path: '/tags4', blank: 'true' }, ui), true, ui.log.join('\n'));
+      assert.deepEqual(ui.log, [`info alder: applied new route: ${rel} (2 holes)`]);
+      const ed = vscode.window.activeTextEditor!;
+      assert.equal(ed.document.uri.fsPath, join(gen(), rel));
+      const line = ed.document.lineAt(ed.selection.active.line).text;
+      assert.equal(line.slice(ed.selection.active.character, ed.selection.active.character + '?load'.length), '?load', line);
+    } finally {
+      for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(gen()))) await revert(d);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      rmSync(join(gen(), 'app/Tags4'), { recursive: true, force: true });
+    }
+  });
+
   it('a refusal is the server text, the alder generate collection stays empty (it carries no diagnostics), nothing changes', async () => {
     const { origin, editor } = await originAt('app/Posts/Index.alder');
     const before = editor.document.getText();

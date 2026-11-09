@@ -1,5 +1,5 @@
 import * as assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { State } from 'vscode-languageclient/node';
@@ -46,6 +46,30 @@ describe('Generate: the flow', () => {
       await until(() => !vscode.window.tabGroups.all.some(g => g.tabs.some(t => t.label.includes('Generate Preview'))), 'the preview tab to close');
     } finally {
       await revert(doc);
+    }
+  });
+
+  it('new route --blank through the form: apply writes it unsaved and lands on the first hole', async () => {
+    await open('gen/app/Posts/Index.alder');
+    const ui = new FakeUi();
+    const path = join(ws(), 'gen/app/Tags6/Index.alder');
+    try {
+      const running = vscode.commands.executeCommand('alder.generate', { id: 'new route', sets: { module: 'Tags6.Index', path: '/tags6', blank: 'true' } }, ui);
+      const form = await until(() => {
+        for (const t of ui.texts) t.finish(undefined);
+        return ui.openForm?.model.ready && !ui.openForm.model.updating ? ui.openForm : undefined;
+      }, 'a ready form');
+      form.answer({ kind: 'apply' });
+      await running;
+      assert.ok(ui.log.includes('info alder: applied new route: app/Tags6/Index.alder (2 holes)'), ui.log.join('\n'));
+      const ed = vscode.window.activeTextEditor!;
+      assert.equal(ed.document.uri.fsPath, path);
+      assert.ok(ed.document.isDirty, 'the new file is saved');
+      assert.ok(ed.document.lineAt(ed.selection.active.line).text.slice(ed.selection.active.character).startsWith('?load'));
+    } finally {
+      for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(join(ws(), 'gen')))) await revert(d);
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      rmSync(join(ws(), 'gen/app/Tags6'), { recursive: true, force: true });
     }
   });
 
