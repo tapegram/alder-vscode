@@ -49,6 +49,31 @@ describe('Generate: the flow', () => {
     }
   });
 
+  it('new msg from a file that is not a route: the guessed page plans and applies, with no page required (alder#211)', async () => {
+    const editor = await open('gen/app/Markdown.alder');
+    const ui = new FakeUi();
+    ui.onPick = rows => rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new msg');
+    ui.onReview = () => 'apply';
+    try {
+      const running = vscode.commands.executeCommand('alder.generate', undefined, ui);
+      // the first field to fill opens as an editor; the form follows
+      const form = await until(() => {
+        for (const t of ui.texts) t.finish(t.title === 'new msg: name' ? 'Delete' : undefined);
+        return ui.openForm?.model.ready && !ui.openForm.model.updating ? ui.openForm : undefined;
+      }, 'a ready form');
+      const page = form.model.rows.find(r => r.name === 'page');
+      assert.ok(page?.value, `the server guessed no page: ${JSON.stringify(form.model.rows)}`);
+      assert.ok(!page.error, `the guessed page is refused: ${page.note}`);
+      form.answer({ kind: 'review' });
+      await running;
+      assert.ok(ui.log.some(l => l.startsWith('info alder: applied new msg: ')), ui.log.join('\n'));
+      assert.ok(!ui.log.some(l => l.includes('required')), ui.log.join('\n'));
+      assert.ok(!editor.document.isDirty, 'the guessed page is not Markdown');
+    } finally {
+      for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(join(ws(), 'gen')))) await revert(d);
+    }
+  });
+
   it('review then back shows the live preview again; the flow\'s end closes the plan diff', async () => {
     const editor = await open('gen/app/Posts/Index.alder');
     const p = at(editor.document, 'Index.load params');
