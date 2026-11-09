@@ -19,7 +19,7 @@ async function serverRoutes(root: string) {
 }
 
 describe('Alder: Routes', () => {
-  it('lists the blog\'s routes from the server, GET / at Posts.Index.page', async () => {
+  it('lists the blog\'s routes from the server, GET / at Posts.Index.Index', async () => {
     await open('blog/app/Posts/Index.alder');
     // the helper falls back to the CLI silently: ask the blog's server by method name
     const client = await (await api()).clients.forUri(vscode.Uri.file(blog()));
@@ -31,10 +31,10 @@ describe('Alder: Routes', () => {
     }, 'the server to list routes');
     assert.ok(raw.length > 0);
     const got = await serverRoutes(blog());
-    const home = got.routes.find(r => r.path === '/' && r.kind === 'page');
+    const home = got.routes.find(r => r.path === '/' && r.method === 'GET');
     assert.ok(home, JSON.stringify(got.routes.slice(0, 3)));
-    assert.equal(`${home.module}.${home.name}`, 'Posts.Index.page');
-    assert.ok(got.routes.some(r => r.kind === 'msg'), 'no msg routes');
+    assert.equal(`${home.module}.${home.name}`, 'Posts.Index.Index');
+    assert.ok(got.routes.some(r => r.method === 'POST'), 'no write routes');
   });
 
   it('the CLI lists the same routes', async () => {

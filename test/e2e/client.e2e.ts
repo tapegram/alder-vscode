@@ -40,7 +40,7 @@ describe('the client', () => {
     }, 'semantic tokens');
     const tokAt = (p: vscode.Position) => toks.find(t => t.line === p.line && t.char === p.character);
     assert.equal(tokAt(at(doc, '<article>', 0, 1))?.type, 'tag');
-    const load = tokAt(at(doc, '\nload ', 0, 1));
+    const load = tokAt(at(doc, '\nShow.load ', 0, 6));
     assert.equal(load?.type, 'function');
     assert.ok(load?.mods.includes('declaration'));
   });
@@ -50,7 +50,7 @@ describe('the client', () => {
   it('the server folds load and the imports (kind imports, also through VS Code)', async () => {
     const { document: doc } = await open('blog/app/Posts/Show.alder');
     const client = await serverOf(doc.uri);
-    const loadLine = at(doc, '\nload ', 0, 1).line;
+    const loadLine = at(doc, '\nShow.load ', 0, 1).line;
     const first = at(doc, 'import Layout').line, last = at(doc, 'import Table.User').line;
     const folds = await client.sendRequest<FoldingRange[] | null>('textDocument/foldingRange', { textDocument: { uri: doc.uri.toString() } });
     assert.ok(folds?.some(f => (f.startLine === loadLine || f.startLine === loadLine + 1) && f.endLine > f.startLine + 5), JSON.stringify(folds));
@@ -77,7 +77,7 @@ describe('the client', () => {
     assert.equal(texts[0], 'model.post.title');
     assert.equal(texts[1], 'title={model.post.title}');
     assert.ok(texts[2].startsWith('<Layout.Page') && texts[2].endsWith('</Layout.Page>'), texts[2]);
-    assert.ok(texts[3].startsWith('view : Model'), texts[3]);
+    assert.ok(texts[3].startsWith('Show.view : Model'), texts[3]);
     assert.ok(texts[4].startsWith('module Posts.Show'), texts[4]);
   });
 

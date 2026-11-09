@@ -18,10 +18,10 @@ async function goodBuild(editor: vscode.TextEditor): Promise<void> {
 }
 
 describe('Generate: the flow', () => {
-  it('new msg on a page: the starting-value field opens first, apply writes it unsaved and lands on the first hole', async () => {
+  it('new msg on a page: the starting-value field opens first, apply writes it unsaved', async () => {
     const editor = await open('gen/app/Posts/Index.alder');
     const doc = editor.document;
-    const p = at(doc, 'load params');
+    const p = at(doc, 'Index.load params');
     editor.selection = new vscode.Selection(p, p);
     await goodBuild(editor);
     const ui = new FakeUi();
@@ -40,11 +40,9 @@ describe('Generate: the flow', () => {
       await until(() => vscode.workspace.textDocuments.find(d => d.uri.path.endsWith('Generate Preview.diff'))?.getText().includes('Delete'), 'the preview document to reload with the Delete diff');
       form.answer({ kind: 'apply' });
       await running;
-      assert.ok(ui.log.includes('info alder: applied new msg: app/Posts/Index.alder (2 holes)'), ui.log.join('\n'));
+      assert.ok(ui.log.includes('info alder: applied new msg: app/Posts/Index.alder'), ui.log.join('\n'));
       assert.ok(doc.isDirty && doc.getText().includes('Delete'));
       assert.ok(!readFileSync(join(ws(), 'gen/app/Posts/Index.alder'), 'utf8').includes('Delete'));
-      const ed = vscode.window.activeTextEditor!;
-      assert.ok(ed.document.lineAt(ed.selection.active.line).text.slice(ed.selection.active.character).startsWith('?delete'));
       await until(() => !vscode.window.tabGroups.all.some(g => g.tabs.some(t => t.label.includes('Generate Preview'))), 'the preview tab to close');
     } finally {
       await revert(doc);
@@ -53,7 +51,7 @@ describe('Generate: the flow', () => {
 
   it('review then back shows the live preview again; the flow\'s end closes the plan diff', async () => {
     const editor = await open('gen/app/Posts/Index.alder');
-    const p = at(editor.document, 'load params');
+    const p = at(editor.document, 'Index.load params');
     editor.selection = new vscode.Selection(p, p);
     await goodBuild(editor);
     const isPreview = (u: vscode.Uri) => u.path.endsWith('Generate Preview.diff');
@@ -84,7 +82,7 @@ describe('Generate: the flow', () => {
   it('a code action preset opens the form without the picker', async () => {
     const editor = await open('gen/app/Posts/Index.alder');
     const doc = editor.document;
-    const p = at(doc, 'load params');
+    const p = at(doc, 'Index.load params');
     const actions = await until(async () => {
       const acts = await vscode.commands.executeCommand<vscode.CodeAction[]>('vscode.executeCodeActionProvider', doc.uri, new vscode.Range(p, p));
       return acts?.filter(a => a.command?.command === 'alder.generate').length ? acts : undefined;
@@ -117,8 +115,8 @@ describe('Generate: the flow', () => {
     const first = new FakeUi();
     const second = new FakeUi();
     let firstDone = false;
-    const one = Promise.resolve(vscode.commands.executeCommand('alder.generate', 'new page', first)).then(() => { firstDone = true; });
-    const two = vscode.commands.executeCommand('alder.generate', 'new page', second);
+    const one = Promise.resolve(vscode.commands.executeCommand('alder.generate', 'new route', first)).then(() => { firstDone = true; });
+    const two = vscode.commands.executeCommand('alder.generate', 'new route', second);
     await until(() => firstDone, 'the older invocation to end', 5000);
     await one;
     const form = await until(() => {

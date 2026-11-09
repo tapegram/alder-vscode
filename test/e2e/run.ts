@@ -62,15 +62,15 @@ async function contract(): Promise<void> {
   copyExample(repo, 'blog', join(ws, 'fill'));
   const app = join(ws, 'fill/app/App.alder');
   const src = readFileSync(app, 'utf8');
-  const holed = src.replace('    Task.succeed (Redirect (Auth.Login {}))\n', '    ?out\n');
+  const holed = src.replace('  Task.succeed (Response.redirect (Auth.Login.Login {}))\n', '  ?out\n');
   if (holed === src) throw new Error('no Logout arm to make a hole of: the blog changed; update the fixture');
   writeFileSync(app, holed);
   writeFileSync(join(ws, 'fill/app/Helpers.alder'),
-    'module Helpers\n\ngoLogin : Task Nav\ngoLogin = Task.succeed (Redirect (Auth.Login {}))\n');
+    'module Helpers\n\ngoLogin : Task Response\ngoLogin = Task.succeed (Response.redirect (Auth.Login.Login {}))\n');
   // gen: a blog copy the generator tests change (created, edited and removed files), with an
-  // unlinked page (Tags.Index) for `remove page`.
+  // unlinked route (Tags.Index) for `remove route`.
   copyExample(repo, 'blog', join(ws, 'gen'));
-  execFileSync(bin, ['new', 'page', 'Tags.Index', '/tags', '--dir', join(ws, 'gen')], { stdio: 'ignore' });
+  execFileSync(bin, ['new', 'route', 'Tags.Index', '/tags', '--dir', join(ws, 'gen')], { stdio: 'ignore' });
   // demo: a fresh `alder new` app with one passing and one failing test (Demo), for the test
   // controller, mutation testing, explain and run. The scaffold's own Home tests pass.
   execFileSync(bin, ['new', 'demo'], { cwd: ws, stdio: 'ignore' });

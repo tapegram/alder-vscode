@@ -25,21 +25,19 @@ async function originAt(rel: string, needle?: string): Promise<{ origin: Origin;
 }
 
 describe('Generate: apply', () => {
-  it('new msg edits the open document unsaved, lands on the first hole, one undo restores it', async () => {
-    const { origin, editor } = await originAt('app/Posts/Index.alder', 'load params');
+  it('new msg edits the open document unsaved, one undo restores it', async () => {
+    const { origin, editor } = await originAt('app/Posts/Index.alder', 'Index.load params');
     const doc = editor.document;
     const before = doc.getText();
     const ui = new FakeUi();
     try {
       assert.equal(await (await api()).generate.apply(origin, 'new msg', { name: 'Delete' }, ui), true, ui.log.join('\n'));
-      assert.deepEqual(ui.log, ['info alder: applied new msg: app/Posts/Index.alder (2 holes)']);
+      assert.deepEqual(ui.log, ['info alder: applied new msg: app/Posts/Index.alder']);
       assert.ok(doc.getText().includes('Delete'));
       assert.ok(doc.isDirty);
       assert.ok(!readFileSync(join(gen(), 'app/Posts/Index.alder'), 'utf8').includes('Delete'), 'wrote to disk');
       const ed = vscode.window.activeTextEditor!;
       assert.equal(ed.document.uri.toString(), doc.uri.toString());
-      const line = ed.document.lineAt(ed.selection.active.line).text;
-      assert.equal(line.slice(ed.selection.active.character, ed.selection.active.character + '?delete'.length), '?delete', line);
       await vscode.commands.executeCommand('undo');
       assert.equal(doc.getText(), before, 'one undo does not restore the document');
     } finally {
@@ -47,15 +45,15 @@ describe('Generate: apply', () => {
     }
   });
 
-  it('new page creates an unsaved document for the module', async () => {
+  it('new route creates an unsaved document for the module', async () => {
     const { origin } = await originAt('app/Posts/Index.alder');
     const ui = new FakeUi();
     const rel = 'app/Tags2/Index.alder';
     try {
-      assert.equal(await (await api()).generate.apply(origin, 'new page', { module: 'Tags2.Index', path: '/tags2' }, ui), true, ui.log.join('\n'));
-      assert.match(ui.log[0], /^info alder: applied new page: .*app\/Tags2\/Index\.alder/);
+      assert.equal(await (await api()).generate.apply(origin, 'new route', { module: 'Tags2.Index', path: '/tags2' }, ui), true, ui.log.join('\n'));
+      assert.match(ui.log[0], /^info alder: applied new route: .*app\/Tags2\/Index\.alder/);
       const doc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === join(gen(), rel));
-      assert.ok(doc, 'no document for the new page');
+      assert.ok(doc, 'no document for the new route');
       assert.ok(doc.isDirty && doc.getText().includes('module Tags2.Index'));
       assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, join(gen(), rel));
     } finally {
@@ -69,7 +67,7 @@ describe('Generate: apply', () => {
     const { origin, editor } = await originAt('app/Posts/Index.alder');
     const before = editor.document.getText();
     const ui = new FakeUi();
-    assert.equal(await (await api()).generate.apply(origin, 'new page', { module: 'Posts.Index', path: '/again' }, ui), false);
+    assert.equal(await (await api()).generate.apply(origin, 'new route', { module: 'Posts.Index', path: '/again' }, ui), false);
     assert.equal(ui.log.length, 1);
     assert.match(ui.log[0], /^error .*Posts\.Index/);
     assert.equal(editor.document.getText(), before);
@@ -92,7 +90,7 @@ describe('Generate: apply', () => {
     assert.ok(vscode.workspace.textDocuments.includes(stale) && !stale.isDirty);
     const ui = new FakeUi();
     try {
-      assert.equal(await (await api()).generate.apply(origin, 'new page', { module: 'Tags3.Index', path: '/tags3' }, ui), true, ui.log.join('\n'));
+      assert.equal(await (await api()).generate.apply(origin, 'new route', { module: 'Tags3.Index', path: '/tags3' }, ui), true, ui.log.join('\n'));
       const doc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === path);
       assert.ok(doc && doc.isDirty);
       assert.equal(doc.getText().split('module Tags3.Index').length, 2, doc.getText());
@@ -103,7 +101,7 @@ describe('Generate: apply', () => {
     }
   });
 
-  it('remove page re-checks the disk after the confirm: a file changed there, no editor open, aborts', async () => {
+  it('remove route re-checks the disk after the confirm: a file changed there, no editor open, aborts', async () => {
     const { origin } = await originAt('app/Posts/Index.alder');
     const path = join(gen(), 'app/Tags/Index.alder');
     const before = readFileSync(path, 'utf8');
@@ -114,7 +112,7 @@ describe('Generate: apply', () => {
       return true;
     };
     try {
-      assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
+      assert.equal(await (await api()).generate.apply(origin, 'remove route', { page: 'Tags.Index' }, ui), false);
       assert.equal(ui.log[1], 'error alder: app/Tags/Index.alder changed since planning; nothing applied');
       assert.ok(existsSync(path));
     } finally {
@@ -122,16 +120,16 @@ describe('Generate: apply', () => {
     }
   });
 
-  it('remove page asks; No applies nothing', async () => {
+  it('remove route asks; No applies nothing', async () => {
     const { origin } = await originAt('app/Tags/Index.alder');
     const ui = new FakeUi();
     ui.onConfirm = () => false;
-    assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
+    assert.equal(await (await api()).generate.apply(origin, 'remove route', { page: 'Tags.Index' }, ui), false);
     assert.deepEqual(ui.log, ['confirm Delete app/Tags/Index.alder? it goes to the trash; undo will not bring it back [Delete]']);
     assert.ok(existsSync(join(gen(), 'app/Tags/Index.alder')));
   });
 
-  it('remove page re-checks after the confirm: an edit made meanwhile aborts', async () => {
+  it('remove route re-checks after the confirm: an edit made meanwhile aborts', async () => {
     const { origin, editor } = await originAt('app/Tags/Index.alder');
     const ui = new FakeUi();
     ui.onConfirm = async () => {
@@ -139,7 +137,7 @@ describe('Generate: apply', () => {
       return true;
     };
     try {
-      assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), false);
+      assert.equal(await (await api()).generate.apply(origin, 'remove route', { page: 'Tags.Index' }, ui), false);
       assert.equal(ui.log[1], 'error alder: app/Tags/Index.alder changed since planning; nothing applied');
       assert.ok(existsSync(join(gen(), 'app/Tags/Index.alder')));
     } finally {
@@ -151,7 +149,7 @@ describe('Generate: apply', () => {
   // says (checked on 1.145: no editor, another editor, the explorer, the reopened tab, a dirty
   // editor all leave it deleted), so the prompt must not promise it
   for (const trash of [true, false]) {
-    it(`remove page, then undo, does not bring the file back (files.enableTrash ${trash}); the prompt says so`, async () => {
+    it(`remove route, then undo, does not bring the file back (files.enableTrash ${trash}); the prompt says so`, async () => {
       const { origin } = await originAt('app/Tags/Index.alder');
       const path = join(gen(), 'app/Tags/Index.alder');
       const before = readFileSync(path, 'utf8');
@@ -160,7 +158,7 @@ describe('Generate: apply', () => {
       const ui = new FakeUi();
       ui.onConfirm = () => true;
       try {
-        assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), true, ui.log.join('\n'));
+        assert.equal(await (await api()).generate.apply(origin, 'remove route', { page: 'Tags.Index' }, ui), true, ui.log.join('\n'));
         assert.ok(!existsSync(path), 'the delete did not remove the file');
         assert.equal(ui.log[0], trash
           ? 'confirm Delete app/Tags/Index.alder? it goes to the trash; undo will not bring it back [Delete]'
@@ -180,15 +178,15 @@ describe('Generate: apply', () => {
     });
   }
 
-  it('remove page with Delete removes the file', async () => {
+  it('remove route with Delete removes the file', async () => {
     const { origin } = await originAt('app/Tags/Index.alder');
     const ui = new FakeUi();
     ui.onConfirm = () => true;
     try {
-      assert.equal(await (await api()).generate.apply(origin, 'remove page', { page: 'Tags.Index' }, ui), true, ui.log.join('\n'));
-      assert.match(ui.log[1], /^info alder: applied remove page: .*app\/Tags\/Index\.alder/);
+      assert.equal(await (await api()).generate.apply(origin, 'remove route', { page: 'Tags.Index' }, ui), true, ui.log.join('\n'));
+      assert.match(ui.log[1], /^info alder: applied remove route: .*app\/Tags\/Index\.alder/);
       assert.ok(!existsSync(join(gen(), 'app/Tags/Index.alder')));
-      assert.ok(!existsSync(join(gen(), 'app/Tags')), 'the empty page folder is left behind');
+      assert.ok(!existsSync(join(gen(), 'app/Tags')), 'the empty route folder is left behind');
     } finally {
       for (const d of vscode.workspace.textDocuments.filter(d => d.isDirty && d.uri.fsPath.startsWith(gen()))) await revert(d);
     }
