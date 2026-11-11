@@ -3,8 +3,9 @@
 Language support for [Alder](https://github.com/tapegram/alder): the `alder lsp` server's
 diagnostics, hover, completion, code actions, formatting, highlighting and folding.
 
-Requires an `alder` binary that has the `lsp` command. Build one from a checkout of
-tapegram/alder: `go build -o ~/bin/alder ./cmd/alder`.
+Requires an `alder` binary that has the `lsp` command (alder v0.2.0 or later). Install it with
+Homebrew: `brew install tapegram/alder/alder`, or `brew upgrade alder` if an older one is
+installed.
 
 ## Install
 
@@ -20,7 +21,7 @@ An `alder` binary with the `lsp` command. The extension looks at the `alder.path
 `PATH`, `$GOBIN`, `$GOPATH/bin`, `~/go/bin` and `~/bin` (VS Code started from the Dock sees a
 shorter `PATH` than your shell); an `alder.path` that is a path is used alone and turns off the
 search. It takes the first `alder` there that has the `lsp` command: an
-older one earlier on `PATH`, such as a packaged release, is skipped and listed by
+older one earlier on `PATH`, such as a release before v0.2.0, is skipped and listed by
 `Alder: Show Health`, which says what it found.
 
 Any alder new enough to have `lsp` works: the extension checks what the binary offers when it
