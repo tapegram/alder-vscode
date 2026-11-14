@@ -148,6 +148,11 @@
         "category": "Alder"
       },
       {
+        "command": "alder.search",
+        "title": "Search",
+        "category": "Alder"
+      },
+      {
         "command": "alder.run",
         "title": "Run the App",
         "category": "Alder"
@@ -223,6 +228,12 @@
         "command": "alder.routes",
         "key": "ctrl+alt+a u",
         "mac": "cmd+alt+a u",
+        "when": "alder.inProject"
+      },
+      {
+        "command": "alder.search",
+        "key": "ctrl+alt+a f",
+        "mac": "cmd+alt+a f",
         "when": "alder.inProject"
       },
       {

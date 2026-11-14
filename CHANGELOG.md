@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Search (`ctrl+alt+a f`): find functions by name or type over `alder/search`, insert or fill a
+  typed hole with `alder/searchEdit`, go to an app result's definition; the "Search for `<type>`"
+  hole action opens it (alder#166). Needs an alder with `alder/search` (CI pins alder 402f344).
+
 ## 0.1.0
 
 - Language registration, fallback grammar, `alder lsp` client per app root, health and restart commands.

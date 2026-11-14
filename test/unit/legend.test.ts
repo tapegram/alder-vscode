@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TOKEN_TYPES, TOKEN_MODIFIERS, CUSTOM_TYPES } from '../../src/legend';
+import { SERVER_COMMANDS } from '../../src/clientConfig';
 import pkg from '../../package.json';
 
 test('the legend is alder internal/semtok, in order', () => {
@@ -22,11 +23,12 @@ test('package.json declares each custom type with its superType and scope', () =
   assert.equal(pkg.contributes.semanticTokenTypes.length, Object.keys(CUSTOM_TYPES).length);
 });
 
-test('package.json contributes the thirteen Alder commands, each with a category', () => {
+test('package.json contributes the fourteen Alder commands, each with a category', () => {
   const ids = pkg.contributes.commands.map(c => c.command).sort();
   assert.deepEqual(ids, ['alder.explainDiagnostic', 'alder.generate', 'alder.generate.apply', 'alder.restartServer', 'alder.routes',
-    'alder.run', 'alder.scratch.open', 'alder.scratch.openValue', 'alder.scratch.send', 'alder.showHealth',
+    'alder.run', 'alder.scratch.open', 'alder.scratch.openValue', 'alder.scratch.send', 'alder.search', 'alder.showHealth',
     'alder.test.mutate', 'alder.test.run', 'alder.test.runAtCursor']);
   assert.ok(pkg.contributes.commands.every(c => c.category === 'Alder'));
   assert.ok(!ids.includes('alder.fill') && !ids.includes('alder.explain'), 'server commands are not contributed');
+  assert.ok(!SERVER_COMMANDS.includes('alder.search'), 'alder.search runs in the client, never sent to the server');
 });
