@@ -26,13 +26,13 @@ describe('Generate: the flow', () => {
     await goodBuild(editor);
     const ui = new FakeUi();
     ui.onPick = rows => {
-      const g = rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new msg');
+      const g = rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new action');
       assert.ok(g, JSON.stringify(rows));
       return g;
     };
     try {
       const running = vscode.commands.executeCommand('alder.generate', undefined, ui);
-      const name = await until(() => ui.texts.find(t => t.title === 'new msg: name'), 'the name editor to open first');
+      const name = await until(() => ui.texts.find(t => t.title === 'new action: name'), 'the name editor to open first');
       name.onChange('Delete');
       name.finish('Delete');
       const form = await until(() => (ui.openForm?.model.ready ? ui.openForm : undefined), 'a ready form');
@@ -40,7 +40,7 @@ describe('Generate: the flow', () => {
       await until(() => vscode.workspace.textDocuments.find(d => d.uri.path.endsWith('Generate Preview.diff'))?.getText().includes('Delete'), 'the preview document to reload with the Delete diff');
       form.answer({ kind: 'apply' });
       await running;
-      assert.ok(ui.log.includes('info alder: applied new msg: app/Posts/Index.alder'), ui.log.join('\n'));
+      assert.ok(ui.log.includes('info alder: applied new action: app/Posts/Index.alder'), ui.log.join('\n'));
       assert.ok(doc.isDirty && doc.getText().includes('Delete'));
       assert.ok(!readFileSync(join(ws(), 'gen/app/Posts/Index.alder'), 'utf8').includes('Delete'));
       await until(() => !vscode.window.tabGroups.all.some(g => g.tabs.some(t => t.label.includes('Generate Preview'))), 'the preview tab to close');
@@ -76,13 +76,13 @@ describe('Generate: the flow', () => {
   it('new msg from a file that is not a route: the guessed page plans and applies, with no page required (alder#211)', async () => {
     const editor = await open('gen/app/Markdown.alder');
     const ui = new FakeUi();
-    ui.onPick = rows => rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new msg');
+    ui.onPick = rows => rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new action');
     ui.onReview = () => 'apply';
     try {
       const running = vscode.commands.executeCommand('alder.generate', undefined, ui);
       // the first field to fill opens as an editor; the form follows
       const form = await until(() => {
-        for (const t of ui.texts) t.finish(t.title === 'new msg: name' ? 'Delete' : undefined);
+        for (const t of ui.texts) t.finish(t.title === 'new action: name' ? 'Delete' : undefined);
         return ui.openForm?.model.ready && !ui.openForm.model.updating ? ui.openForm : undefined;
       }, 'a ready form');
       const page = form.model.rows.find(r => r.name === 'page');
@@ -90,7 +90,7 @@ describe('Generate: the flow', () => {
       assert.ok(!page.error, `the guessed page is refused: ${page.note}`);
       form.answer({ kind: 'review' });
       await running;
-      assert.ok(ui.log.some(l => l.startsWith('info alder: applied new msg: ')), ui.log.join('\n'));
+      assert.ok(ui.log.some(l => l.startsWith('info alder: applied new action: ')), ui.log.join('\n'));
       assert.ok(!ui.log.some(l => l.includes('required')), ui.log.join('\n'));
       assert.ok(!editor.document.isDirty, 'the guessed page is not Markdown');
     } finally {
@@ -107,7 +107,7 @@ describe('Generate: the flow', () => {
     const isPlan = (t: vscode.Tab) => t.input instanceof vscode.TabInputTextDiff && t.input.modified.path.startsWith('/plan/');
     const tabs = () => vscode.window.tabGroups.all.flatMap(g => g.tabs);
     const ui = new FakeUi();
-    ui.onPick = rows => rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new msg');
+    ui.onPick = rows => rows.flatMap(r => ('item' in r ? [r.item] : [])).find(x => x.id === 'new action');
     ui.onReview = async (m, o) => {
       o.onActive(m.files[0]);
       // the plan diff opens beside, in front of the preview
@@ -116,7 +116,7 @@ describe('Generate: the flow', () => {
       return 'back' as const;
     };
     const running = vscode.commands.executeCommand('alder.generate', undefined, ui);
-    const name = await until(() => ui.texts.find(t => t.title === 'new msg: name'), 'the name editor');
+    const name = await until(() => ui.texts.find(t => t.title === 'new action: name'), 'the name editor');
     name.finish('Delete');
     const form = await until(() => (ui.openForm?.model.ready && !ui.openForm.model.updating ? ui.openForm : undefined), 'a ready form');
     form.answer({ kind: 'review' });
