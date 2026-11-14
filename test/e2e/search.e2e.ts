@@ -1,11 +1,11 @@
 import * as assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { State, type LanguageClient } from 'vscode-languageclient/node';
-import type { SearchSession, SearchUi } from '../../src/search';
-import { searchLabel, type SearchItem, type SearchReply } from '../../src/searchItems';
+import { quickPickUi, type SearchSession, type SearchUi } from '../../src/search';
+import { searchLabel, OLD_ALDER, type SearchItem, type SearchReply } from '../../src/searchItems';
 import { api, at, open, revert, until, ws } from './helpers';
 
 type Picked = { item: SearchItem; button?: 'definition' } | undefined;
@@ -46,6 +46,9 @@ class FakeSearch implements SearchUi {
 }
 
 const blog = () => join(ws(), 'blog');
+
+// realBin is the alder the workspace uses (its settings' alder.path)
+const realBin = () => vscode.workspace.getConfiguration('alder').get<string>('path', 'alder');
 
 async function client(rel: string): Promise<LanguageClient> {
   const c = await (await api()).clients.forUri(vscode.Uri.file(join(ws(), rel)));
@@ -207,26 +210,131 @@ describe('Alder: Search', () => {
     }
   });
 
-  it('old server message', async () => {
+  it('old server message: -32601 from alder/search says update alder and does not run the CLI', async () => {
     await open('blog/app/App.alder');
-    // a server with no alder/search, and a binary with no search command
+    // a server with no alder/search; the binary records each run
     const dir = mkdtempSync(join(tmpdir(), 'alder-old-'));
     const bin = join(dir, 'alder');
-    writeFileSync(bin, '#!/bin/sh\necho "usage: alder <command> [arguments]" >&2\nexit 2\n', { mode: 0o755 });
+    const ran = join(dir, 'ran');
+    writeFileSync(bin, `#!/bin/sh\ntouch '${ran}'\nexec '${realBin()}' "$@"\n`, { mode: 0o755 });
     const a = await api();
     const { binary, forUri } = a.clients;
     const old = { state: State.Running, sendRequest: async () => { throw Object.assign(new Error('Unhandled method alder/search'), { code: -32601 }); } };
     a.clients.binary = async () => bin;
     a.clients.forUri = async () => old as unknown as LanguageClient;
     try {
-      const ui = new FakeSearch();
+      const ui = new FakeSearch(async f => {
+        const n = f.shown.length;
+        f.type('split');
+        await until(() => f.shown.length > n, 'the split answer');
+        return undefined;
+      });
       await search(ui);
-      const notes = ui.shown.map(s => s.note);
-      assert.ok(notes.some(n => /update alder/.test(n)), JSON.stringify(notes));
+      assert.ok(ui.shown.length >= 1);
+      assert.deepEqual(ui.inits[0].items, []);
+      for (const s of ui.shown) {
+        assert.equal(s.note, OLD_ALDER);
+        assert.deepEqual(s.items, []);
+      }
+      assert.ok(!existsSync(ran), 'the CLI ran');
     } finally {
       a.clients.binary = binary;
       a.clients.forUri = forUri;
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('another alder/search failure falls back to the CLI', async () => {
+    await open('blog/app/App.alder');
+    const a = await api();
+    const { forUri } = a.clients;
+    const broken = { state: State.Running, sendRequest: async () => { throw Object.assign(new Error('internal error'), { code: -32603 }); } };
+    a.clients.forUri = async () => broken as unknown as LanguageClient;
+    try {
+      const ui = new FakeSearch(async f => {
+        f.type('split');
+        await f.waitFor(l => l.includes('Text.split'), 'the CLI\'s Text.split');
+        return undefined;
+      });
+      await search(ui);
+      const split = ui.last().find(i => i.label === 'Text.split');
+      assert.ok(split && split.result.uri === undefined, 'a CLI row (no uri)');
+    } finally {
+      a.clients.forUri = forUri;
+    }
+  });
+
+  it('no server: the CLI answers each query, Enter inserts the label, the button opens the CLI\'s line', async () => {
+    const ed = await open('blog/app/App.alder');
+    const doc = ed.document;
+    const a = await api();
+    const { forUri } = a.clients;
+    a.clients.forUri = async () => undefined;
+    try {
+      const end = doc.lineAt(doc.lineCount - 1).range.end;
+      ed.selection = new vscode.Selection(end, end);
+      const ui = new FakeSearch(async f => {
+        // -x reaches the CLI as the query, not as a flag
+        f.type('-x');
+        await until(() => f.shown.length >= 1, 'the -x answer');
+        assert.equal(f.shown[0].note, '', JSON.stringify(f.shown[0]));
+        f.type('-> Int');
+        const note = await until(() => f.shown.find(s => /not a complete type/.test(s.note)), 'the not-a-complete-type note');
+        assert.deepEqual(note.items, []);
+        f.type('split');
+        const items = await f.waitFor(l => l.includes('Text.split'), 'Text.split');
+        return { item: items.find(i => i.label === 'Text.split')! };
+      });
+      await search(ui);
+      assert.equal(doc.lineAt(end.line).text, doc.lineAt(end.line).text.slice(0, end.character) + 'Text.split');
+      const s = vscode.window.activeTextEditor!.selection;
+      assert.deepEqual([s.active.line, s.active.character], [end.line, end.character + 'Text.split'.length]);
+
+      const def = new FakeSearch(async f => {
+        f.type('isAdmin');
+        const items = await f.waitFor(l => l.includes('Admin.Layout.isAdmin'), 'Admin.Layout.isAdmin');
+        const item = items.find(i => i.label === 'Admin.Layout.isAdmin')!;
+        assert.equal(item.result.line, 32);
+        return { item, button: 'definition' };
+      });
+      await search(def);
+      const opened = vscode.window.activeTextEditor!;
+      assert.equal(opened.document.uri.fsPath, join(blog(), 'app/Admin/Layout.alder'));
+      assert.equal(opened.selection.active.line, 31);
+      assert.match(opened.document.lineAt(31).text, /^isAdmin :/);
+    } finally {
+      a.clients.forUri = forUri;
+      await revert(doc);
+    }
+  });
+
+  it('a rejected alder/searchEdit is shown and changes nothing', async () => {
+    const ed = await open('search/app/Hole.alder');
+    const doc = ed.document;
+    const errors: string[] = [];
+    const win = vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage };
+    const show = win.showErrorMessage;
+    win.showErrorMessage = ((m: string, ...rest: unknown[]) => {
+      errors.push(m);
+      return (show as (m: string, ...r: unknown[]) => Thenable<unknown>)(m, ...rest);
+    }) as typeof show;
+    try {
+      await holeReady(doc);
+      const p = at(doc, '?h');
+      ed.selection = new vscode.Selection(p, p);
+      // an entry the index does not have: the server rejects it
+      const ui = new FakeSearch(async f => {
+        await f.waitFor(l => l.length > 0, 'the hole\'s results');
+        const item = f.last()[0];
+        return { item: { ...item, label: 'Nope.nope', result: { ...item.result, module: 'Nope', name: 'nope' } } };
+      });
+      await search(ui);
+      assert.ok(errors.some(m => /^alder search: .*Nope\.nope/.test(m)), JSON.stringify(errors));
+      assert.equal(doc.isDirty, false);
+      assert.ok(doc.getText().includes('?h'));
+    } finally {
+      win.showErrorMessage = show;
+      await revert(doc);
     }
   });
 
@@ -281,10 +389,14 @@ describe('Alder: Search', () => {
       await until(() => contexts.includes('alder.inProject'), 'the extension\'s own setContext');
       const a = await api();
       a.search.debounceMs = 0;
+      // the real quick pick, wrapped to know when it is open
+      let opened = false;
+      a.search.ui = { open: init => { const s = quickPickUi.open(init); opened = true; return s; } };
       const running = exec('alder.search');
-      await new Promise(r => setTimeout(r, 1000));
+      await until(() => opened, 'the search quick pick to open');
       await exec('workbench.action.closeQuickOpen');
       await running;
+      a.search.ui = undefined;
       a.search.debounceMs = undefined;
       assert.ok(!contexts.includes('alder.formOpen'), JSON.stringify(contexts));
     } finally {

@@ -48,7 +48,8 @@ export const quickPickUi: SearchUi = {
     qp.ignoreFocusOut = true;
     qp.value = init.value;
     qp.items = init.items;
-    // VS Code sorts by its own match unless told not to (1.94+; ignored before, alwaysShow keeps every item)
+    // VS Code sorts by its own label match unless told not to; the 1.91 typings lack the
+    // property, but the 1.91 host has its setter
     (qp as unknown as { sortByLabel: boolean }).sortByLabel = false;
     let last = init.value;
     let change: ((q: string) => void) | undefined;
@@ -145,6 +146,9 @@ export async function searchCommand(deps: Deps, ui: SearchUi = quickPickUi, at?:
         const r = await client.sendRequest<SearchReply>('alder/search', params);
         return { query: r.query ?? query, results: r.results ?? [], note: r.note ?? '', server: true };
       } catch (err) {
+        // a server with no alder/search says so (as alder.nvim does): no CLI, whose answers
+        // would hide that the server needs a restart
+        if (isOldServer(err)) return { query, results: [], note: OLD_ALDER, server: false };
         lspError = err;
       }
     }
@@ -202,7 +206,7 @@ async function askCli(deps: Deps, root: string, query: string, lspError?: unknow
   if (res.code !== 0) {
     const e = searchCliError(res, lspError === undefined ? undefined : message(lspError));
     if ('note' in e) return none(e.note);
-    return none(isOldServer(lspError) ? OLD_ALDER : e.error);
+    return none(e.error);
   }
   try {
     const r = normalizeCli(res.stdout, root);
