@@ -10,6 +10,7 @@ import type { Sets } from './generate/types';
 import { report } from './health';
 import { AppTerminals } from './run';
 import { fetchCli, fetchRoutes, Fetched, pickRoutes, RouteUi } from './routes';
+import { searchArgs, searchCommand, type SearchHooks } from './search';
 import { ScratchUi } from './scratchUi';
 import { AlderTests } from './tests';
 import { VirtualDocs } from './virtualDocs';
@@ -29,6 +30,8 @@ export interface Api {
     diagnostics: vscode.DiagnosticCollection;
   };
   scratch: ScratchUi;
+  // search: a test's quick pick and debounce for Alder: Search
+  search: SearchHooks;
 }
 
 let clients: Clients | undefined;
@@ -50,6 +53,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   const scratch = new ScratchUi(deps);
   scratch.register(context);
 
+  const searchHooks: SearchHooks = {};
+
   const health = async () => {
     const env = serverEnv(process.env, vscode.workspace.getConfiguration('alder').get('serverEnv'));
     return report(await cs.checkGate(), cs.statuses(), env);
@@ -66,6 +71,12 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
     vscode.commands.registerCommand('alder.explainDiagnostic', (code?: unknown) => explainDiagnostic(deps, typeof code === 'string' ? code : undefined)),
     vscode.commands.registerCommand('alder.routes', (ui?: RouteUi) => pickRoutes(deps, ui && typeof ui.pick === 'function' ? ui : undefined)),
+    // alder.search runs in the client (not a SERVER_COMMAND): its argument is a test's picker or
+    // the server's "Search for <type>" code action's { uri, position }
+    vscode.commands.registerCommand('alder.search', (arg?: unknown) => {
+      const { ui, at } = searchArgs(arg);
+      return searchCommand(deps, ui ?? searchHooks.ui, at, { debounceMs: searchHooks.debounceMs });
+    }),
     vscode.commands.registerCommand('alder.run', () => terminals.run()),
     vscode.commands.registerCommand('alder.test.run', () => tests.runActive('test')),
     vscode.commands.registerCommand('alder.test.runAtCursor', () => tests.runAtCursor()),
@@ -88,6 +99,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     health,
     generate: { run: (p, ui) => generate.run(p, ui), apply: (o, id, s, ui) => generate.apply(o, id, s, ui), diagnostics: generate.diagnostics },
     scratch,
+    search: searchHooks,
   };
 }
 

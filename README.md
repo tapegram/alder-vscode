@@ -49,6 +49,13 @@ All under "Alder" in the command palette; the chord is `ctrl+alt+a` (`cmd+alt+a`
   edited and new files are left unsaved, and a file the generator removes is deleted only after
   you confirm. The generator code actions (the lightbulb) open the same flow, already filled in.
 - **Routes** (`u`): the app's pages and messages; pick one to open its declaration.
+- **Search** (`f`): find a function of the standard library or the app by name or by type
+  (`split`, `Text.`, `Text -> Int`, `: List Text`). Results come from `alder lsp` in its order,
+  with the signature and the doc's first line; Enter inserts the result at the caret (adding an
+  import when it needs one), and the item button opens an app result's declaration. On a typed
+  hole the box opens with `: <hole type>` and Enter fills the hole, the caret on the first new
+  hole so fills can be chained; the hole's "Search for `<type>`" code action does the same. With
+  no server it runs `alder search --json` and inserts the plain name.
 - **Run the App** (`r`): `alder run` in a terminal at the app root, reused while it is open.
 - **Explain Diagnostic** (`e`): the explanation of the diagnostic under the cursor (or a code you
   type) in a markdown preview.

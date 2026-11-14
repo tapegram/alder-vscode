@@ -31,7 +31,8 @@ export interface SearchItem extends QuickPickItem { result: SearchResult }
 export const OLD_ALDER =
   'this alder has no search (update alder: go install ./cmd/alder in the alder repo, then Alder: Restart Server)';
 
-// A plain object shaped like ThemeIcon('go-to-file'); the real class needs the vscode runtime.
+// A plain object shaped like ThemeIcon('go-to-file'), for unit tests: the real class needs the
+// vscode runtime, so search.ts passes its own button.
 const GO_TO_DEFINITION: QuickInputButton = {
   iconPath: { id: 'go-to-file' } as ThemeIcon,
   tooltip: 'Go to definition',
@@ -41,14 +42,14 @@ export function searchLabel(r: Pick<SearchResult, 'module' | 'name'>): string {
   return r.module === 'Prelude' ? r.name : `${r.module}.${r.name}`;
 }
 
-export function toItem(r: SearchResult): SearchItem {
+export function toItem(r: SearchResult, button: QuickInputButton = GO_TO_DEFINITION): SearchItem {
   const first = r.doc.split('\n')[0].trim();
   return {
     label: searchLabel(r),
     description: r.signature,
     detail: first === '' ? undefined : first,
     alwaysShow: true,
-    ...(r.uri !== undefined || r.file !== undefined ? { buttons: [GO_TO_DEFINITION] } : {}),
+    ...(r.uri !== undefined || r.file !== undefined ? { buttons: [button] } : {}),
     result: r,
   };
 }

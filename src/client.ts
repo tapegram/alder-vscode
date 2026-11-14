@@ -2,7 +2,8 @@ import * as os from 'node:os';
 import { basename } from 'node:path';
 import * as vscode from 'vscode';
 import {
-  CloseAction, ErrorAction, ExecuteCommandRequest, LanguageClient, LanguageClientOptions, ServerOptions, State,
+  ClientCapabilities, CloseAction, ErrorAction, ExecuteCommandRequest, FeatureState, LanguageClient, LanguageClientOptions,
+  ServerOptions, State, StaticFeature,
 } from 'vscode-languageclient/node';
 import { findRoot, realRoot } from './root';
 import { checkBinary, Gate, MISSING_SCRATCH, MISSING_TOKENS, RootStatus } from './health';
@@ -21,6 +22,17 @@ class AlderClient extends LanguageClient {
     super.error(message, data, this.quiet ? false : showNotification);
   }
 }
+
+// searchFeature declares experimental.alderSearch: the client runs the alder.search command of
+// the server's "Search for <type>" code action itself (see search.ts).
+const searchFeature: StaticFeature = {
+  fillClientCapabilities(caps: ClientCapabilities) {
+    caps.experimental = { ...(caps.experimental as object | undefined), alderSearch: true };
+  },
+  initialize() {},
+  getState: (): FeatureState => ({ kind: 'static' }),
+  clear() {},
+};
 
 // Clients is one LanguageClient per app root, as alder.nvim has one client per root. Roots are
 // compared by real path; the selector covers the path the documents use and the real one.
@@ -136,6 +148,7 @@ export class Clients {
     // The extension registers the server's commands once for all clients (see SERVER_COMMANDS).
     const exec = client.getFeature(ExecuteCommandRequest.method) as unknown as { initialize: (c: unknown) => void };
     exec.initialize = () => {};
+    client.registerFeature(searchFeature);
     client.onNotification('alder/scratch', (p: ScratchParams) => this.scratch.record(p, snapshot(p)));
     const e: Entry = { root, real, client, starting: Promise.resolve(false), stopping: false };
     e.starting = client.start().then(() => {

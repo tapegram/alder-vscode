@@ -42,6 +42,19 @@ export const DEMO = [
   '',
 ].join('\n');
 
+// HOLE's lines are pinned by search.e2e.ts (0-based: the hole on 4, the empty line 8).
+export const HOLE = [
+  'module Hole',
+  '',
+  'parts : List Text',
+  'parts =',
+  '  ?h',
+  '',
+  'greeting : Text',
+  'greeting = "hi"',
+  '',
+].join('\n');
+
 // PAD's lines are pinned by scratch.e2e.ts.
 export const PAD = [
   'module Pad',
@@ -67,6 +80,9 @@ async function contract(): Promise<void> {
   writeFileSync(app, holed);
   writeFileSync(join(ws, 'fill/app/Helpers.alder'),
     'module Helpers\n\ngoLogin : Task Response\ngoLogin = Task.succeed (Response.redirect (Auth.Login.Login {}))\n');
+  // search: a blog copy with a module holding a typed hole (search.e2e.ts fills it and reverts)
+  copyExample(repo, 'blog', join(ws, 'search'));
+  writeFileSync(join(ws, 'search/app/Hole.alder'), HOLE);
   // gen: a blog copy the generator tests change (created, edited and removed files), with an
   // unlinked route (Tags.Index) for `remove route`.
   copyExample(repo, 'blog', join(ws, 'gen'));
